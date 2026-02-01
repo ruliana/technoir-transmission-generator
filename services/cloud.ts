@@ -59,23 +59,56 @@ export const fetchCloudManifest = async (): Promise<CloudManifestItem[]> => {
 export const fetchCloudTransmission = async (filename: string): Promise<Transmission> => {
     const res = await fetch(getPublicUrl(filename));
     if (!res.ok) throw new Error("Failed to load transmission");
+
+    // Check if it's a gzip file
+    if (filename.endsWith('.gz') || filename.endsWith('.json.gz')) {
+        if (!('DecompressionStream' in window)) {
+            throw new Error("Browser doesn't support decompression");
+        }
+        const ds = new DecompressionStream('gzip');
+        const stream = res.body!.pipeThrough(ds);
+        const response = new Response(stream);
+        return await response.json();
+    }
+
     return await res.json();
 };
 
 // Upload Transmission to Cloud (Master Only)
 export const uploadTransmissionToCloud = async (transmission: Transmission, accessToken: string) => {
-    const filename = `transmission_${transmission.id}.json`;
+    const filename = `transmission_${transmission.id}.json.gz`;
     const jsonStr = JSON.stringify(transmission);
-    
-    // 1. Upload the File
+
+    // 1. Compress and Upload the File
+    let uploadBody: BodyInit;
+    let contentType: string;
+
+    if ('CompressionStream' in window) {
+        // Compress using gzip
+        const stream = new ReadableStream({
+            start(controller) {
+                controller.enqueue(new TextEncoder().encode(jsonStr));
+                controller.close();
+            }
+        });
+        const compressedStream = stream.pipeThrough(new CompressionStream('gzip'));
+        const response = new Response(compressedStream);
+        uploadBody = await response.blob();
+        contentType = 'application/gzip';
+    } else {
+        // Fallback: uncompressed JSON
+        uploadBody = jsonStr;
+        contentType = 'application/json';
+    }
+
     const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${GCS_BUCKET_NAME}/o?uploadType=media&name=${filename}`;
     const res = await fetch(uploadUrl, {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
+            'Content-Type': contentType
         },
-        body: jsonStr
+        body: uploadBody
     });
 
     if (!res.ok) throw new Error("Upload failed: " + res.statusText);
