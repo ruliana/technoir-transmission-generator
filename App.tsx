@@ -28,7 +28,7 @@ const useTypewriter = (text: string, speed: number = 10, startTrigger: boolean =
       setIsComplete(false);
       return;
     }
-    
+
     setIndex(0);
     setIsComplete(false);
 
@@ -37,6 +37,39 @@ const useTypewriter = (text: string, speed: number = 10, startTrigger: boolean =
       currentIdx++;
       if (currentIdx >= text.length) {
         setIndex(text.length);
+        setIsComplete(true);
+        clearInterval(interval);
+      } else {
+        setIndex(currentIdx);
+      }
+    }, speed);
+
+    return () => clearInterval(interval);
+  }, [text, speed, startTrigger]);
+
+  return { displayedText: text.slice(0, index), isComplete };
+};
+
+// Reverse Typewriter hook (deletes from end to beginning)
+const useReverseTypewriter = (text: string, speed: number = 5, startTrigger: boolean = false) => {
+  const [index, setIndex] = useState(text.length);
+  const [isComplete, setIsComplete] = useState(false);
+
+  useEffect(() => {
+    if (!startTrigger || !text) {
+      setIndex(text.length);
+      setIsComplete(false);
+      return;
+    }
+
+    setIndex(text.length);
+    setIsComplete(false);
+
+    let currentIdx = text.length;
+    const interval = setInterval(() => {
+      currentIdx--;
+      if (currentIdx <= 0) {
+        setIndex(0);
         setIsComplete(true);
         clearInterval(interval);
       } else {
@@ -726,14 +759,117 @@ const LeadDossier: React.FC<{
   apiKeySelected: boolean;
   onConnectKey: () => void;
 }> = ({ lead, details, isRevealed, onClose, onRegenerate, onUpdate, exposition, apiKeySelected, onConnectKey }) => {
-  const { displayedText: dossierText, isComplete: dossierDone } = useTypewriter(details?.expandedDescription || '', 4, !!details?.expandedDescription);
   const hasImage = !!details?.imageUrl;
-  let scanClass = isRevealed && hasImage ? "revealed" : (dossierDone && !hasImage ? "scanning-up" : "");
   const [isRegenerating, setIsRegenerating] = useState<string | null>(null);
   const [regenPhase, setRegenPhase] = useState<{
     field: string | null;
-    phase: 'erasing' | 'revealing' | null;
+    phase: 'deleting' | 'typing' | null;
   }>({ field: null, phase: null });
+
+  // Text state for typewriter effects
+  const [textState, setTextState] = useState<{
+    sensory: { sight: string; sound: string; smell: string; vibe: string };
+    dossier: string;
+    oldText: string; // For reverse typewriter during deletion
+  }>({
+    sensory: {
+      sight: details?.sensory.sight || '',
+      sound: details?.sensory.sound || '',
+      smell: details?.sensory.smell || '',
+      vibe: details?.sensory.vibe || ''
+    },
+    dossier: details?.expandedDescription || '',
+    oldText: ''
+  });
+
+  // Typewriter hooks for each sensory field
+  const { displayedText: sightTyped } = useTypewriter(
+    textState.sensory.sight,
+    4,
+    regenPhase.field === 'sensory-sight' && regenPhase.phase === 'typing'
+  );
+  const { displayedText: soundTyped } = useTypewriter(
+    textState.sensory.sound,
+    4,
+    regenPhase.field === 'sensory-sound' && regenPhase.phase === 'typing'
+  );
+  const { displayedText: smellTyped } = useTypewriter(
+    textState.sensory.smell,
+    4,
+    regenPhase.field === 'sensory-smell' && regenPhase.phase === 'typing'
+  );
+  const { displayedText: vibeTyped } = useTypewriter(
+    textState.sensory.vibe,
+    4,
+    regenPhase.field === 'sensory-vibe' && regenPhase.phase === 'typing'
+  );
+
+  // Dossier typewriter
+  const { displayedText: dossierTyped, isComplete: dossierDone } = useTypewriter(
+    textState.dossier,
+    4,
+    regenPhase.field === 'dossier' && regenPhase.phase === 'typing' ? true : (regenPhase.field === 'dossier' ? false : true)
+  );
+
+  // Reverse typewriter for deletion
+  const { displayedText: deletingText } = useReverseTypewriter(
+    textState.oldText,
+    3,
+    regenPhase.phase === 'deleting'
+  );
+
+  // Helper to get displayed text for sensory fields
+  const getSensoryDisplayText = (field: 'sight' | 'sound' | 'smell' | 'vibe') => {
+    const fieldKey = `sensory-${field}`;
+
+    // Show loading indicator if no details yet (initial load)
+    if (!details) {
+      return null;
+    }
+
+    // During regeneration: deleting phase - show reverse typewriter
+    if (regenPhase.field === fieldKey && regenPhase.phase === 'deleting') {
+      return deletingText;
+    }
+
+    // During regeneration: API call (after deletion, before typing) - show loading indicator
+    if (isRegenerating === fieldKey && regenPhase.phase !== 'typing') {
+      return null;
+    }
+
+    // During regeneration: typing phase - show forward typewriter
+    if (regenPhase.field === fieldKey && regenPhase.phase === 'typing') {
+      const typed = { sight: sightTyped, sound: soundTyped, smell: smellTyped, vibe: vibeTyped }[field];
+      return typed;
+    }
+
+    // Normal display (not regenerating)
+    return textState.sensory[field];
+  };
+
+  // Helper for dossier text
+  const getDossierDisplayText = () => {
+    // Show loading indicator if no details yet (initial load)
+    if (!details) {
+      return null;
+    }
+
+    // During regeneration: deleting phase - show reverse typewriter
+    if (regenPhase.field === 'dossier' && regenPhase.phase === 'deleting') {
+      return deletingText;
+    }
+
+    // During regeneration: API call (after deletion, before typing) - show loading indicator
+    if (isRegenerating === 'dossier' && regenPhase.phase !== 'typing') {
+      return null;
+    }
+
+    // During regeneration: typing phase OR normal display - show forward typewriter
+    return dossierTyped;
+  };
+
+  let scanClass = isRevealed && hasImage ? "revealed" : (dossierDone && !hasImage ? "scanning-up" : "");
+
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValues, setEditValues] = useState({
     sight: details?.sensory.sight || '',
@@ -742,6 +878,22 @@ const LeadDossier: React.FC<{
     vibe: details?.sensory.vibe || '',
     expandedDescription: details?.expandedDescription || ''
   });
+
+  // Update text state when details change
+  useEffect(() => {
+    if (details && regenPhase.field === null) {
+      setTextState({
+        sensory: {
+          sight: details.sensory.sight,
+          sound: details.sensory.sound,
+          smell: details.sensory.smell,
+          vibe: details.sensory.vibe
+        },
+        dossier: details.expandedDescription,
+        oldText: ''
+      });
+    }
+  }, [details, regenPhase.field]);
 
   const handleRegenClick = async (
     fieldType: 'sensory' | 'dossier' | 'image',
@@ -754,24 +906,67 @@ const LeadDossier: React.FC<{
 
     const key = fieldType === 'sensory' ? `${fieldType}-${sensoryField}` : fieldType;
 
-    // Phase 1: Erase animation
-    setRegenPhase({ field: key, phase: 'erasing' });
-    await new Promise(resolve => setTimeout(resolve, 1500)); // Wait for scanUp
+    if (fieldType === 'image') {
+      // For images: use scan line animation (erase → reveal)
+      setRegenPhase({ field: key, phase: 'deleting' });
+      await new Promise(resolve => setTimeout(resolve, 1500)); // Wait for scanUp
 
-    // Phase 2: API call
-    setIsRegenerating(key);
-    try {
-      await onRegenerate(lead, fieldType, sensoryField);
+      setIsRegenerating(key);
+      try {
+        await onRegenerate(lead, fieldType, sensoryField);
 
-      // Phase 3: Reveal animation
-      setRegenPhase({ field: key, phase: 'revealing' });
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for scanDown
+        setRegenPhase({ field: key, phase: 'typing' });
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for scanDown
+      } catch (error) {
+        console.error('Regeneration failed:', error);
+      } finally {
+        setIsRegenerating(null);
+        setRegenPhase({ field: null, phase: null });
+      }
+    } else {
+      // For text: use typewriter effects (delete → type)
+      // Phase 1: Store old text and trigger reverse typewriter
+      const oldText = fieldType === 'dossier'
+        ? textState.dossier
+        : textState.sensory[sensoryField!];
 
-    } catch (error) {
-      console.error('Regeneration failed:', error);
-    } finally {
-      setIsRegenerating(null);
-      setRegenPhase({ field: null, phase: null });
+      setTextState(prev => ({ ...prev, oldText }));
+      setRegenPhase({ field: key, phase: 'deleting' });
+
+      // Calculate deletion time based on text length (min 500ms, max 2000ms)
+      const deleteTime = Math.min(Math.max(oldText.length * 3, 500), 2000);
+      await new Promise(resolve => setTimeout(resolve, deleteTime));
+
+      // Phase 2: API call
+      setIsRegenerating(key);
+      try {
+        await onRegenerate(lead, fieldType, sensoryField);
+
+        // Phase 3: Update text state with new value and trigger forward typewriter
+        if (fieldType === 'dossier') {
+          setTextState(prev => ({ ...prev, dossier: lead.details?.expandedDescription || prev.dossier }));
+        } else if (sensoryField) {
+          setTextState(prev => ({
+            ...prev,
+            sensory: { ...prev.sensory, [sensoryField]: lead.details?.sensory[sensoryField] || prev.sensory[sensoryField] }
+          }));
+        }
+
+        setRegenPhase({ field: key, phase: 'typing' });
+
+        // Calculate typing time based on new text length
+        const newText = fieldType === 'dossier'
+          ? lead.details?.expandedDescription || ''
+          : lead.details?.sensory[sensoryField!] || '';
+        const typeTime = Math.min(Math.max(newText.length * 4, 500), 3000);
+        await new Promise(resolve => setTimeout(resolve, typeTime));
+
+      } catch (error) {
+        console.error('Regeneration failed:', error);
+      } finally {
+        setIsRegenerating(null);
+        setRegenPhase({ field: null, phase: null });
+      }
     }
   };
 
@@ -816,11 +1011,18 @@ const LeadDossier: React.FC<{
             <>
               <div className={`relative w-full h-full regenerating-image-container ${
                 regenPhase.field === 'image'
-                  ? (regenPhase.phase === 'erasing' ? 'erasing' : 'revealing')
+                  ? (regenPhase.phase === 'deleting' ? 'deleting' : 'typing')
                   : ''
               }`}>
                 <div className="scan-line" />
                 <img src={details.imageUrl} className="w-full h-full object-cover opacity-80" alt={lead.name} />
+                {isRegenerating === 'image' && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+                    <div className="text-sm text-cyan-600 uppercase loading-indicator">
+                      [ LOADING VISUAL DATA<span className="loading-dots"></span> ]
+                    </div>
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => handleRegenClick('image')}
@@ -831,7 +1033,11 @@ const LeadDossier: React.FC<{
               </button>
             </>
           ) : (
-            <div className="text-[10px] text-cyan-800 animate-pulse">NO VISUAL DATA</div>
+            <div className="flex flex-col items-center justify-center gap-2">
+              <div className="text-sm text-cyan-600 uppercase loading-indicator">
+                [ LOADING VISUAL DATA<span className="loading-dots"></span> ]
+              </div>
+            </div>
           )}
           <div className="absolute bottom-0 left-0 w-full p-6 bg-gradient-to-t from-black to-transparent">
             <h2 className="text-3xl font-orbitron text-white uppercase italic">{lead.name}</h2>
@@ -841,11 +1047,10 @@ const LeadDossier: React.FC<{
           <button onClick={onClose} className="absolute top-4 right-4 bg-black/80 border border-cyan-900 p-2 text-cyan-400 rounded-full">X</button>
           <div className="grid grid-cols-2 gap-4 mb-8">
             {details && Object.entries(details.sensory).map(([k, v]) => {
+              const field = k as 'sight' | 'sound' | 'smell' | 'vibe';
               const fieldKey = `sensory-${k}`;
               const isThisFieldRegenerating = regenPhase.field === fieldKey;
-              const scanClass = isThisFieldRegenerating
-                ? (regenPhase.phase === 'erasing' ? 'erasing' : 'revealing')
-                : '';
+              const displayText = getSensoryDisplayText(field);
 
               return (
                 <div key={k} className="group relative">
@@ -865,11 +1070,17 @@ const LeadDossier: React.FC<{
                     </div>
                   ) : (
                     <>
-                      <div className={`scan-reveal-text ${scanClass}`}>
-                        <div className="scan-line" />
-                        <div className="text-[10px] text-gray-400 italic">
-                          {isRegenerating === fieldKey && regenPhase.phase !== 'revealing' ? '...' : v}
-                        </div>
+                      <div className="typewriter-text">
+                        {displayText === null ? (
+                          <div className="text-[9px] text-cyan-600 uppercase loading-indicator">
+                            [ DECRYPTING<span className="loading-dots"></span> ]
+                          </div>
+                        ) : (
+                          <div className="text-[10px] text-gray-400 italic">
+                            {displayText}
+                            {isThisFieldRegenerating && regenPhase.phase === 'typing' && <span className="cursor-active" />}
+                          </div>
+                        )}
                       </div>
                       <div className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                         <button
@@ -879,7 +1090,7 @@ const LeadDossier: React.FC<{
                           [ edit ]
                         </button>
                         <button
-                          onClick={() => handleRegenClick('sensory', k as 'sight' | 'sound' | 'smell' | 'vibe')}
+                          onClick={() => handleRegenClick('sensory', field)}
                           disabled={isRegenerating === fieldKey || isThisFieldRegenerating}
                           className="text-[8px] text-cyan-800 hover:text-cyan-400 uppercase disabled:opacity-50"
                         >
@@ -927,17 +1138,18 @@ const LeadDossier: React.FC<{
                 </div>
               </div>
             ) : (
-              <div className={`dossier-scan-container ${
-                regenPhase.field === 'dossier'
-                  ? (regenPhase.phase === 'erasing' ? 'erasing' : 'revealing')
-                  : ''
-              }`}>
-                <div className="scan-line" />
-                <p className="text-xs md:text-sm text-gray-300 leading-relaxed font-light whitespace-pre-wrap">
-                  {isRegenerating === 'dossier' && regenPhase.phase !== 'revealing'
-                    ? 'Regenerating dossier content...'
-                    : dossierText}
-                </p>
+              <div className="dossier-typewriter">
+                {getDossierDisplayText() === null ? (
+                  <div className="text-xs text-cyan-600 uppercase loading-indicator">
+                    [ DECRYPTING<span className="loading-dots"></span> ]
+                  </div>
+                ) : (
+                  <p className={`text-xs md:text-sm text-gray-300 leading-relaxed font-light whitespace-pre-wrap ${
+                    regenPhase.field === 'dossier' && regenPhase.phase === 'typing' ? 'cursor-active' : ''
+                  }`}>
+                    {getDossierDisplayText()}
+                  </p>
+                )}
               </div>
             )}
           </div>

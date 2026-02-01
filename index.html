@@ -108,78 +108,15 @@
             100% { top: 100%; opacity: 0; }
         }
 
-        /* Scan reveal for text fields (sensory fields) */
-        .scan-reveal-text {
+        /* Typewriter text container (for sensory fields and dossier) */
+        .typewriter-text {
             position: relative;
-            overflow: hidden;
             min-height: 40px;
         }
 
-        .scan-reveal-text .scan-line {
-            position: absolute;
-            left: 0;
-            width: 100%;
-            height: 2px;
-            background: #00f2ff;
-            box-shadow: 0 0 15px #00f2ff, 0 0 30px #00f2ff;
-            z-index: 30;
-            top: 0;
-            opacity: 0;
-        }
-
-        .scan-reveal-text.erasing .scan-line {
-            animation: scanUp 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-        }
-
-        .scan-reveal-text.revealing .scan-line {
-            animation: scanDown 2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-        }
-
-        .scan-reveal-text.erasing {
-            opacity: 0.4;
-            transition: opacity 1.5s ease;
-        }
-
-        .scan-reveal-text.revealing {
-            opacity: 1;
-            transition: opacity 0.3s ease;
-        }
-
-        /* Dossier paragraph container */
-        .dossier-scan-container {
+        .dossier-typewriter {
             position: relative;
-            overflow: hidden;
             min-height: 100px;
-        }
-
-        .dossier-scan-container .scan-line {
-            position: absolute;
-            left: 0;
-            width: 100%;
-            height: 2px;
-            background: #00f2ff;
-            box-shadow: 0 0 15px #00f2ff, 0 0 30px #00f2ff;
-            z-index: 30;
-            top: 0;
-            opacity: 0;
-        }
-
-        .dossier-scan-container.erasing .scan-line {
-            animation: scanUp 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-        }
-
-        .dossier-scan-container.revealing .scan-line {
-            animation: scanDown 2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-        }
-
-        .dossier-scan-container.erasing p {
-            opacity: 0.4;
-            transition: opacity 1.5s ease;
-        }
-
-        .dossier-scan-container.revealing p {
-            opacity: 1;
-            transition: opacity 0.3s ease;
         }
 
         /* Image container - ONLY scan line, NO corruption effect */
@@ -199,20 +136,20 @@
             opacity: 0;
         }
 
-        .regenerating-image-container.erasing .scan-line {
+        .regenerating-image-container.deleting .scan-line {
             animation: scanUp 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
         }
 
-        .regenerating-image-container.revealing .scan-line {
+        .regenerating-image-container.typing .scan-line {
             animation: scanDown 2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
         }
 
-        .regenerating-image-container.erasing img {
+        .regenerating-image-container.deleting img {
             opacity: 0.4;
             transition: opacity 1.5s ease;
         }
 
-        .regenerating-image-container.revealing img {
+        .regenerating-image-container.typing img {
             opacity: 0.8;
             transition: opacity 0.3s ease;
         }
@@ -228,6 +165,25 @@
         @keyframes blink {
             0%, 100% { opacity: 1; }
             50% { opacity: 0; }
+        }
+
+        /* Loading indicator with pulsing dots */
+        .loading-indicator {
+            color: #00f2ff;
+            font-family: 'JetBrains Mono', monospace;
+            text-shadow: 0 0 10px rgba(0, 242, 255, 0.6);
+        }
+
+        .loading-dots::after {
+            content: ' ...';
+            animation: loadingDots 1.5s infinite;
+        }
+
+        @keyframes loadingDots {
+            0% { content: ' .'; }
+            33% { content: ' ..'; }
+            66% { content: ' ...'; }
+            100% { content: ' .'; }
         }
 
         /* Skeleton styling */
@@ -368,9 +324,8 @@
             .regenerating-image-wrapper::before,
             .deleting-text,
             .regenerating-text-cursor,
-            .scan-reveal-text .scan-line,
-            .dossier-scan-container .scan-line,
-            .regenerating-image-container .scan-line {
+            .regenerating-image-container .scan-line,
+            .loading-dots::after {
                 animation: none !important;
             }
 
@@ -378,18 +333,18 @@
                 opacity: 0.5;
             }
 
-            .scan-reveal-text.erasing,
-            .dossier-scan-container.erasing p,
-            .regenerating-image-container.erasing img {
+            .regenerating-image-container.deleting img {
                 opacity: 0.5;
                 transition: none;
             }
 
-            .scan-reveal-text.revealing,
-            .dossier-scan-container.revealing p,
-            .regenerating-image-container.revealing img {
+            .regenerating-image-container.typing img {
                 opacity: 1;
                 transition: none;
+            }
+
+            .loading-dots::after {
+                content: ' ...' !important;
             }
         }
     </style>
