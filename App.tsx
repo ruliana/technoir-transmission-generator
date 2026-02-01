@@ -1,15 +1,17 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { CloudManifestItem, GameState, Lead, LeadDetails, Transmission, User } from './types';
-import { 
-  generateTitleAndSetting, 
-  generateExposition, 
-  generateLeads, 
-  generateTransmissionHeader, 
+import {
+  generateTitleAndSetting,
+  generateExposition,
+  generateLeads,
+  generateTransmissionHeader,
   generateLeadInspectionText,
   generateLeadInspectionImage,
   generateFullTransmission,
-  setGeminiUser
+  regenerateSensoryField,
+  regenerateExpandedDescription,
+  regenerateLeadImage
 } from './services/gemini';
 import { saveTransmission, getAllTransmissions, deleteTransmission, exportTransmission, importTransmission } from './services/db';
 import { initGoogleClient, signIn, fetchCloudManifest, fetchCloudTransmission, uploadTransmissionToCloud } from './services/cloud';
@@ -66,7 +68,7 @@ const App: React.FC = () => {
   // Auth State
   const [user, setUser] = useState<User | null>(null);
   const [showKeyModal, setShowKeyModal] = useState(false);
-  const [hasManualKey, setHasManualKey] = useState(false);
+  const [hasApiKey, setHasManualKey] = useState(false);
   const [isBulkGenerating, setIsBulkGenerating] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -79,7 +81,6 @@ const App: React.FC = () => {
     
     initGoogleClient((u) => {
         setUser(u);
-        setGeminiUser(u);
     });
   }, []);
 
@@ -109,7 +110,7 @@ const App: React.FC = () => {
 
   // --- Generation Handlers ---
 
-  const canGenerate = user || hasManualKey;
+  const canGenerate = user || hasApiKey;
 
   const handleGenerate = async () => {
     if (!canGenerate) {
@@ -227,22 +228,26 @@ const App: React.FC = () => {
             {/* Login / Auth Section */}
             <div className="flex items-center justify-between text-[10px] uppercase tracking-wider border-b border-gray-900 pb-4">
                 <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${user || hasManualKey ? 'bg-green-500 cyber-glow' : 'bg-red-900'}`} />
-                    <span>{user ? `OPERATOR: ${user.name}` : (hasManualKey ? 'GUEST_OPERATOR' : 'NO_AUTH_UPLINK')}</span>
-                    {user?.isMaster && <span className="text-yellow-500 font-bold">[MASTER]</span>}
+                    <div className={`w-2 h-2 rounded-full ${hasApiKey ? 'bg-green-500 cyber-glow' : 'bg-red-900'}`} />
+                    <span>{hasApiKey ? 'API_KEY_CONNECTED' : 'NO_API_KEY'}</span>
+                    {user && <span className="ml-2 text-gray-600">({user.name})</span>}
                 </div>
-                {!user ? (
-                   <div className="flex gap-2">
-                       <button onClick={signIn} className="text-cyan-600 hover:text-cyan-400 border border-cyan-900/50 px-2 py-1">
-                           Google_Login
-                       </button>
-                       <button onClick={() => setShowKeyModal(true)} className="text-gray-500 hover:text-gray-300 px-2 py-1">
-                           Input_Key
-                       </button>
-                   </div>
-                ) : (
-                    <div className="text-gray-600">Secure Connection</div>
-                )}
+                <div className="flex gap-2">
+                    {!hasApiKey ? (
+                        <button onClick={() => setShowKeyModal(true)} className="text-cyan-600 hover:text-cyan-400 border border-cyan-900/50 px-2 py-1">
+                            Connect_API_Key
+                        </button>
+                    ) : (
+                        <button onClick={handleDisconnectKey} className="text-red-800 hover:text-red-500 px-2 py-1">
+                            Disconnect_Key
+                        </button>
+                    )}
+                    {!user && (
+                        <button onClick={signIn} className="text-gray-600 hover:text-gray-400 px-2 py-1" title="Optional: For cloud sync">
+                            Google_Sync
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Generator */}
@@ -250,13 +255,16 @@ const App: React.FC = () => {
                  {/* Lock overlay if not auth */}
                  {!canGenerate && (
                      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center text-center p-6 space-y-4">
-                         <div className="text-red-600 font-orbitron text-xl">ACCESS DENIED</div>
-                         <p className="text-xs text-gray-500">Authentication required to initiate new transmissions.</p>
-                         <div className="flex gap-4">
-                             <button onClick={signIn} className="bg-cyan-950 text-cyan-400 px-4 py-2 border border-cyan-600 hover:bg-cyan-900 text-xs font-bold tracking-widest uppercase">
-                                 Operator Login
-                             </button>
-                         </div>
+                         <div className="text-red-600 font-orbitron text-xl">API KEY REQUIRED</div>
+                         <p className="text-xs text-gray-500">Connect your Gemini API key to generate transmissions.</p>
+                         <a
+                             href="https://aistudio.google.com/app/apikey"
+                             target="_blank"
+                             rel="noopener noreferrer"
+                             className="text-cyan-600 hover:text-cyan-400 text-[10px] underline"
+                         >
+                             Get a free API key from Google AI Studio
+                         </a>
                      </div>
                  )}
 
@@ -290,7 +298,7 @@ const App: React.FC = () => {
                  </div>
             </div>
             
-            {hasManualKey && (
+            {hasApiKey && (
                 <div className="text-center">
                     <button onClick={handleDisconnectKey} className="text-[9px] text-red-900 hover:text-red-600 uppercase tracking-widest">[ Disconnect_Manual_Key ]</button>
                 </div>
@@ -440,7 +448,7 @@ const App: React.FC = () => {
 
     setActiveLead({ lead });
     setIsImageRevealed(false);
-    
+
     try {
       const textDetails = await generateLeadInspectionText(lead, t.title, t.settingSummary, t.exposition);
       const leadWithText = { ...lead, details: { ...textDetails, expandedDescription: textDetails.expandedDescription } };
@@ -448,7 +456,7 @@ const App: React.FC = () => {
 
       const imageUrl = await generateLeadInspectionImage(lead, t.title, t.settingSummary, textDetails.sensory.sight);
       const finalDetails = { ...textDetails, imageUrl };
-      
+
       setState(prev => {
         if (!prev.transmission) return prev;
         const updatedTransmission = {
@@ -462,6 +470,68 @@ const App: React.FC = () => {
       setTimeout(() => setIsImageRevealed(true), 300);
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleRegenerateDossierField = async (
+    lead: Lead,
+    fieldType: 'sensory' | 'dossier' | 'image',
+    sensoryField?: 'sight' | 'sound' | 'smell' | 'vibe'
+  ) => {
+    if (!canGenerate) {
+      setShowKeyModal(true);
+      return;
+    }
+
+    if (!lead.details || !state.transmission) return;
+
+    try {
+      let updatedDetails = { ...lead.details };
+
+      if (fieldType === 'sensory' && sensoryField) {
+        const newValue = await regenerateSensoryField(
+          lead,
+          sensoryField,
+          lead.details.sensory,
+          state.transmission.exposition
+        );
+        updatedDetails.sensory = { ...lead.details.sensory, [sensoryField]: newValue };
+      } else if (fieldType === 'dossier') {
+        const newDescription = await regenerateExpandedDescription(
+          lead,
+          lead.details.sensory,
+          state.transmission.exposition
+        );
+        updatedDetails.expandedDescription = newDescription;
+      } else if (fieldType === 'image') {
+        const newImageUrl = await regenerateLeadImage(
+          lead,
+          lead.details.sensory,
+          lead.details.expandedDescription,
+          state.transmission.exposition
+        );
+        if (newImageUrl) {
+          updatedDetails.imageUrl = newImageUrl;
+        }
+      }
+
+      // Update state
+      setState(prev => {
+        if (!prev.transmission) return prev;
+        const updatedTransmission = {
+          ...prev.transmission,
+          leads: prev.transmission.leads.map(l =>
+            l.id === lead.id ? { ...l, details: updatedDetails } : l
+          )
+        };
+        saveTransmission(updatedTransmission);
+        return { ...prev, transmission: updatedTransmission };
+      });
+
+      // Update active lead display
+      setActiveLead({ lead: { ...lead, details: updatedDetails }, details: updatedDetails });
+    } catch (e) {
+      console.error('Regeneration failed:', e);
     }
   };
 
@@ -545,11 +615,29 @@ const App: React.FC = () => {
       </div>
 
       {activeLead && (
-        <LeadDossier 
-          lead={activeLead.lead} 
-          details={activeLead.details} 
+        <LeadDossier
+          lead={activeLead.lead}
+          details={activeLead.details}
           isRevealed={isImageRevealed}
-          onClose={() => setActiveLead(null)} 
+          onClose={() => setActiveLead(null)}
+          onRegenerate={handleRegenerateDossierField}
+          onUpdate={(updatedLead) => {
+            setState(prev => {
+              if (!prev.transmission) return prev;
+              const updatedTransmission = {
+                ...prev.transmission,
+                leads: prev.transmission.leads.map(l =>
+                  l.id === updatedLead.id ? updatedLead : l
+                )
+              };
+              saveTransmission(updatedTransmission);
+              return { ...prev, transmission: updatedTransmission };
+            });
+            setActiveLead({ lead: updatedLead, details: updatedLead.details });
+          }}
+          exposition={t.exposition}
+          apiKeySelected={canGenerate}
+          onConnectKey={() => setShowKeyModal(true)}
         />
       )}
     </div>
@@ -607,8 +695,16 @@ const ApiKeyModal: React.FC<{ onClose: () => void; onSubmit: (key: string) => vo
         <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4">
             <div className="w-full max-w-lg cyber-border bg-black p-8 relative">
                  <button onClick={onClose} className="absolute top-4 right-4 text-cyan-900 hover:text-cyan-400">X</button>
-                 <h2 className="text-xl font-orbitron text-red-600 uppercase mb-4">Manual Override</h2>
-                 <p className="text-[10px] text-gray-500 mb-4">Enter Gemini API Key to bypass security protocols.</p>
+                 <h2 className="text-xl font-orbitron text-cyan-500 uppercase mb-4">Connect API Key</h2>
+                 <p className="text-[10px] text-gray-500 mb-4">
+                     Enter your Gemini API key. Get one free at{' '}
+                     <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-cyan-600 underline">
+                         Google AI Studio
+                     </a>
+                 </p>
+                 <p className="text-[9px] text-gray-600 mb-4">
+                     Your key is stored locally in your browser and never sent to our servers.
+                 </p>
                  <input type="password" value={input} onChange={(e) => setInput(e.target.value)} className="w-full bg-black border border-cyan-900 p-3 text-cyan-400 text-xs mb-4" placeholder="AIza..." autoFocus />
                  <div className="flex gap-4">
                      <button onClick={onClose} className="flex-1 py-2 border border-red-900 text-red-800 text-[10px]">CANCEL</button>
@@ -619,27 +715,231 @@ const ApiKeyModal: React.FC<{ onClose: () => void; onSubmit: (key: string) => vo
     );
 };
 
-const LeadDossier: React.FC<{ lead: Lead; details?: LeadDetails; isRevealed: boolean; onClose: () => void }> = ({ lead, details, isRevealed, onClose }) => {
+const LeadDossier: React.FC<{
+  lead: Lead;
+  details?: LeadDetails;
+  isRevealed: boolean;
+  onClose: () => void;
+  onRegenerate: (lead: Lead, fieldType: 'sensory' | 'dossier' | 'image', sensoryField?: 'sight' | 'sound' | 'smell' | 'vibe') => Promise<void>;
+  onUpdate: (lead: Lead) => void;
+  exposition: Exposition;
+  apiKeySelected: boolean;
+  onConnectKey: () => void;
+}> = ({ lead, details, isRevealed, onClose, onRegenerate, onUpdate, exposition, apiKeySelected, onConnectKey }) => {
   const { displayedText: dossierText, isComplete: dossierDone } = useTypewriter(details?.expandedDescription || '', 4, !!details?.expandedDescription);
   const hasImage = !!details?.imageUrl;
   let scanClass = isRevealed && hasImage ? "revealed" : (dossierDone && !hasImage ? "scanning-up" : "");
+  const [isRegenerating, setIsRegenerating] = useState<string | null>(null);
+  const [regenPhase, setRegenPhase] = useState<{
+    field: string | null;
+    phase: 'erasing' | 'revealing' | null;
+  }>({ field: null, phase: null });
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState({
+    sight: details?.sensory.sight || '',
+    sound: details?.sensory.sound || '',
+    smell: details?.sensory.smell || '',
+    vibe: details?.sensory.vibe || '',
+    expandedDescription: details?.expandedDescription || ''
+  });
+
+  const handleRegenClick = async (
+    fieldType: 'sensory' | 'dossier' | 'image',
+    sensoryField?: 'sight' | 'sound' | 'smell' | 'vibe'
+  ) => {
+    if (!apiKeySelected) {
+      onConnectKey();
+      return;
+    }
+
+    const key = fieldType === 'sensory' ? `${fieldType}-${sensoryField}` : fieldType;
+
+    // Phase 1: Erase animation
+    setRegenPhase({ field: key, phase: 'erasing' });
+    await new Promise(resolve => setTimeout(resolve, 1500)); // Wait for scanUp
+
+    // Phase 2: API call
+    setIsRegenerating(key);
+    try {
+      await onRegenerate(lead, fieldType, sensoryField);
+
+      // Phase 3: Reveal animation
+      setRegenPhase({ field: key, phase: 'revealing' });
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for scanDown
+
+    } catch (error) {
+      console.error('Regeneration failed:', error);
+    } finally {
+      setIsRegenerating(null);
+      setRegenPhase({ field: null, phase: null });
+    }
+  };
+
+  const handleEditClick = (fieldName: string) => {
+    if (!details) return;
+    setEditingField(fieldName);
+    if (fieldName === 'expandedDescription') {
+      setEditValues(prev => ({ ...prev, expandedDescription: details.expandedDescription }));
+    } else {
+      setEditValues(prev => ({ ...prev, [fieldName]: details.sensory[fieldName as keyof typeof details.sensory] }));
+    }
+  };
+
+  const handleSaveEdit = () => {
+    if (!details || !editingField) return;
+
+    let updatedDetails = { ...details };
+
+    if (editingField === 'expandedDescription') {
+      updatedDetails.expandedDescription = editValues.expandedDescription;
+    } else {
+      updatedDetails.sensory = {
+        ...details.sensory,
+        [editingField]: editValues[editingField as keyof typeof editValues]
+      };
+    }
+
+    onUpdate({ ...lead, details: updatedDetails });
+    setEditingField(null);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingField(null);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-black/95 backdrop-blur-sm overflow-hidden">
       <div className="w-full h-full md:max-w-6xl md:h-[90vh] border border-cyan-900/50 bg-black flex flex-col md:flex-row shadow-[0_0_100px_rgba(0,0,0,1)]">
-        <div className={`w-full h-[40%] md:h-full md:w-[45%] bg-gray-950 relative border-r border-cyan-950/30 flex items-center justify-center overflow-hidden shrink-0 scan-reveal ${scanClass}`}>
+        <div className={`w-full h-[40%] md:h-full md:w-[45%] bg-gray-950 relative border-r border-cyan-950/30 flex items-center justify-center overflow-hidden shrink-0 scan-reveal group ${scanClass}`}>
           <div className="scan-line" />
-          {details?.imageUrl ? <img src={details.imageUrl} className="w-full h-full object-cover opacity-80" alt={lead.name} /> : <div className="text-[10px] text-cyan-800 animate-pulse">NO VISUAL DATA</div>}
-          <div className="absolute bottom-0 left-0 w-full p-6 bg-gradient-to-t from-black to-transparent"><h2 className="text-3xl font-orbitron text-white uppercase italic">{lead.name}</h2></div>
+          {details?.imageUrl ? (
+            <>
+              <div className={`relative w-full h-full regenerating-image-container ${
+                regenPhase.field === 'image'
+                  ? (regenPhase.phase === 'erasing' ? 'erasing' : 'revealing')
+                  : ''
+              }`}>
+                <div className="scan-line" />
+                <img src={details.imageUrl} className="w-full h-full object-cover opacity-80" alt={lead.name} />
+              </div>
+              <button
+                onClick={() => handleRegenClick('image')}
+                disabled={isRegenerating === 'image' || regenPhase.field === 'image'}
+                className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity text-[8px] text-cyan-800 hover:text-cyan-400 uppercase bg-black/80 border border-cyan-900 px-2 py-1 disabled:opacity-50"
+              >
+                {isRegenerating === 'image' || regenPhase.field === 'image' ? '...' : '[ regen image ]'}
+              </button>
+            </>
+          ) : (
+            <div className="text-[10px] text-cyan-800 animate-pulse">NO VISUAL DATA</div>
+          )}
+          <div className="absolute bottom-0 left-0 w-full p-6 bg-gradient-to-t from-black to-transparent">
+            <h2 className="text-3xl font-orbitron text-white uppercase italic">{lead.name}</h2>
+          </div>
         </div>
         <div className="flex-1 flex flex-col relative bg-black p-6 md:p-12 overflow-y-auto">
           <button onClick={onClose} className="absolute top-4 right-4 bg-black/80 border border-cyan-900 p-2 text-cyan-400 rounded-full">X</button>
           <div className="grid grid-cols-2 gap-4 mb-8">
-              {details && Object.entries(details.sensory).map(([k, v]) => <div key={k}><div className="text-[9px] text-cyan-900 uppercase">{k}</div><div className="text-[10px] text-gray-400 italic">{v}</div></div>)}
+            {details && Object.entries(details.sensory).map(([k, v]) => {
+              const fieldKey = `sensory-${k}`;
+              const isThisFieldRegenerating = regenPhase.field === fieldKey;
+              const scanClass = isThisFieldRegenerating
+                ? (regenPhase.phase === 'erasing' ? 'erasing' : 'revealing')
+                : '';
+
+              return (
+                <div key={k} className="group relative">
+                  <div className="text-[9px] text-cyan-900 uppercase">{k}</div>
+                  {editingField === k ? (
+                    <div className="space-y-2">
+                      <textarea
+                        value={editValues[k as keyof typeof editValues]}
+                        onChange={(e) => setEditValues(prev => ({ ...prev, [k]: e.target.value }))}
+                        className="w-full bg-black border border-cyan-800 p-2 text-[10px] text-cyan-200 h-20 resize-none"
+                        autoFocus
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <button onClick={handleCancelEdit} className="text-[9px] text-red-500 hover:text-red-400">CANCEL</button>
+                        <button onClick={handleSaveEdit} className="text-[9px] text-green-500 hover:text-green-400">SAVE</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className={`scan-reveal-text ${scanClass}`}>
+                        <div className="scan-line" />
+                        <div className="text-[10px] text-gray-400 italic">
+                          {isRegenerating === fieldKey && regenPhase.phase !== 'revealing' ? '...' : v}
+                        </div>
+                      </div>
+                      <div className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                        <button
+                          onClick={() => handleEditClick(k)}
+                          className="text-[8px] text-cyan-800 hover:text-cyan-400 uppercase"
+                        >
+                          [ edit ]
+                        </button>
+                        <button
+                          onClick={() => handleRegenClick('sensory', k as 'sight' | 'sound' | 'smell' | 'vibe')}
+                          disabled={isRegenerating === fieldKey || isThisFieldRegenerating}
+                          className="text-[8px] text-cyan-800 hover:text-cyan-400 uppercase disabled:opacity-50"
+                        >
+                          {isRegenerating === fieldKey || isThisFieldRegenerating ? '...' : '[ regen ]'}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </div>
           <div className="space-y-4">
-            <h3 className="text-[10px] font-bold text-cyan-700 uppercase border-b border-cyan-950 pb-2">Dossier</h3>
-            <p className="text-xs md:text-sm text-gray-300 leading-relaxed font-light whitespace-pre-wrap">{dossierText}</p>
+            <div className="flex items-center justify-between border-b border-cyan-950 pb-2">
+              <h3 className="text-[10px] font-bold text-cyan-700 uppercase">Dossier</h3>
+              {details && editingField !== 'expandedDescription' && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleEditClick('expandedDescription')}
+                    className="text-[8px] text-cyan-800 hover:text-cyan-400 uppercase"
+                  >
+                    [ edit ]
+                  </button>
+                  <button
+                    onClick={() => handleRegenClick('dossier')}
+                    disabled={isRegenerating === 'dossier' || regenPhase.field === 'dossier'}
+                    className="text-[8px] text-cyan-800 hover:text-cyan-400 uppercase disabled:opacity-50"
+                  >
+                    {isRegenerating === 'dossier' || regenPhase.field === 'dossier' ? 'Generating...' : '[ regen ]'}
+                  </button>
+                </div>
+              )}
+            </div>
+            {editingField === 'expandedDescription' ? (
+              <div className="space-y-2">
+                <textarea
+                  value={editValues.expandedDescription}
+                  onChange={(e) => setEditValues(prev => ({ ...prev, expandedDescription: e.target.value }))}
+                  className="w-full bg-black border border-cyan-800 p-3 text-xs text-cyan-200 h-48 resize-none"
+                  autoFocus
+                />
+                <div className="flex gap-2 justify-end">
+                  <button onClick={handleCancelEdit} className="text-[9px] text-red-500 hover:text-red-400">CANCEL</button>
+                  <button onClick={handleSaveEdit} className="text-[9px] text-green-500 hover:text-green-400">SAVE</button>
+                </div>
+              </div>
+            ) : (
+              <div className={`dossier-scan-container ${
+                regenPhase.field === 'dossier'
+                  ? (regenPhase.phase === 'erasing' ? 'erasing' : 'revealing')
+                  : ''
+              }`}>
+                <div className="scan-line" />
+                <p className="text-xs md:text-sm text-gray-300 leading-relaxed font-light whitespace-pre-wrap">
+                  {isRegenerating === 'dossier' && regenPhase.phase !== 'revealing'
+                    ? 'Regenerating dossier content...'
+                    : dossierText}
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>

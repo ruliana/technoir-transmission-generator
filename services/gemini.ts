@@ -3,30 +3,9 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { SYSTEM_INSTRUCTION } from "../constants";
 import { LeadDetails, Lead, Transmission, Exposition, User } from "../types";
 
-// User state to determine which key to use
-let currentUser: User | null = null;
-
-export const setGeminiUser = (user: User | null) => {
-    currentUser = user;
-};
-
-// Retrieve key from Environment (Master), Local Storage (Guest), or AI Studio
+// Retrieve key from Local Storage (BYOK-only)
 const getApiKey = (): string | undefined => {
-  // 1. If Master, prioritize Environment Variable
-  // NOTE: In a client-side build, this env var must be injected at build time or via a server proxy.
-  if (currentUser?.isMaster && (process.env as any)['API_KEY']) {
-      return (process.env as any)['API_KEY'];
-  }
-
-  // 2. Check Local Storage (Guest BYOK)
-  const localKey = localStorage.getItem('technoir_api_key');
-  if (localKey) return localKey;
-
-  // 3. Fallback to Environment if strictly defined (e.g. AI Studio preview)
-  const envKey = (process.env as any)['API_KEY'];
-  if (envKey) return envKey;
-
-  return undefined;
+  return localStorage.getItem('technoir_api_key') || undefined;
 };
 
 const getAI = () => {
@@ -295,10 +274,156 @@ export const generateLeadInspectionImage = async (
   return undefined;
 };
 
+// Regenerate a single sensory field
+export const regenerateSensoryField = async (
+  lead: Lead,
+  fieldName: 'sight' | 'sound' | 'smell' | 'vibe',
+  currentSensory: LeadDetails['sensory'],
+  exposition: Exposition
+): Promise<string> => {
+  const otherFields = Object.entries(currentSensory)
+    .filter(([key]) => key !== fieldName)
+    .map(([key, val]) => `${key}: ${val}`)
+    .join('\n');
+
+  const result = await streamJson<{ [key: string]: string }>(
+    'gemini-3-flash-preview',
+    `Context: Technoir lead "${lead.name}" (${lead.category}).
+    Description: ${lead.description}
+
+    Exposition Context:
+    - Tech: ${exposition.technology}
+    - Society: ${exposition.society}
+    - Environment: ${exposition.environment}
+
+    Existing sensory data:
+    ${otherFields}
+
+    Task: Generate a new ${fieldName} sensory input that complements the existing sensory data and fits the exposition context. Keep it concise and evocative.`,
+    {
+      systemInstruction: SYSTEM_INSTRUCTION,
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          [fieldName]: { type: Type.STRING }
+        },
+        required: [fieldName]
+      }
+    }
+  );
+  return result[fieldName];
+};
+
+// Regenerate the expanded description (dossier)
+export const regenerateExpandedDescription = async (
+  lead: Lead,
+  sensory: LeadDetails['sensory'],
+  exposition: Exposition
+): Promise<string> => {
+  const result = await streamJson<{ expandedDescription: string }>(
+    'gemini-3-flash-preview',
+    `Context: Technoir lead "${lead.name}" (${lead.category}).
+    Description: ${lead.description}
+
+    Exposition Context:
+    - Tech: ${exposition.technology}
+    - Society: ${exposition.society}
+    - Environment: ${exposition.environment}
+
+    Sensory Data:
+    - Sight: ${sensory.sight}
+    - Sound: ${sensory.sound}
+    - Smell: ${sensory.smell}
+    - Vibe: ${sensory.vibe}
+
+    Task: Generate a hardboiled, atmospheric paragraph (expanded description) that integrates the sensory data and exposition. It should feel like a GM describing this node to players in a Technoir game.`,
+    {
+      systemInstruction: SYSTEM_INSTRUCTION,
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          expandedDescription: { type: Type.STRING }
+        },
+        required: ['expandedDescription']
+      }
+    }
+  );
+  return result.expandedDescription;
+};
+
+// Regenerate lead image with full context
+export const regenerateLeadImage = async (
+  lead: Lead,
+  sensory: LeadDetails['sensory'],
+  expandedDescription: string,
+  exposition: Exposition
+): Promise<string | undefined> => {
+  try {
+    let focusDirective = '';
+
+    switch(lead.category) {
+        case 'Locations':
+            focusDirective = 'Wide or medium shot of the environment/location. Architecture, mood, lighting. NO central character. Environmental focus.';
+            break;
+        case 'Objects':
+            focusDirective = 'Close-up product shot or macro detail of the object. High texture. Object is the sole subject. No people.';
+            break;
+        case 'Events':
+            focusDirective = 'Dynamic scene, active situation, implied motion. Narrative focus.';
+            break;
+        default:
+            focusDirective = 'Character portrait or group shot. Distinct cyberpunk fashion, expressive, moody lighting. Focus on the individual(s).';
+            break;
+    }
+
+    const ai = getAI();
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: {
+        parts: [
+          { text: `Cinematic cyberpunk noir visualization.
+          Subject: "${lead.name}"
+          Category: ${lead.category}
+          Description: ${lead.description}
+
+          Environmental Context:
+          - Technology: ${exposition.technology}
+          - Environment: ${exposition.environment}
+
+          Visual Details:
+          - Sight: ${sensory.sight}
+          - Sound: ${sensory.sound}
+          - Smell: ${sensory.smell}
+          - Vibe: ${sensory.vibe}
+
+          Scene Description: ${expandedDescription}
+
+          Directive: ${focusDirective}
+          Style: Gritty, shadow-heavy, high contrast, hyper-detailed, 8k resolution, cinematic lighting, volumetric fog.` }
+        ]
+      },
+      config: {
+        imageConfig: { aspectRatio: "1:1" }
+      }
+    });
+
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData) {
+        return `data:image/png;base64,${part.inlineData.data}`;
+      }
+    }
+  } catch (e) {
+    console.error("Lead image regeneration failed", e);
+  }
+  return undefined;
+};
+
 // --- NEW: BACKGROUND GENERATION ---
 // This runs the full pipeline for ALL leads. Expensive!
 export const generateFullTransmission = async (
-    theme: string, 
+    theme: string,
     onLog: (msg: string) => void
 ): Promise<Transmission> => {
     

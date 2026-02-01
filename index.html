@@ -108,6 +108,115 @@
             100% { top: 100%; opacity: 0; }
         }
 
+        /* Scan reveal for text fields (sensory fields) */
+        .scan-reveal-text {
+            position: relative;
+            overflow: hidden;
+            min-height: 40px;
+        }
+
+        .scan-reveal-text .scan-line {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: #00f2ff;
+            box-shadow: 0 0 15px #00f2ff, 0 0 30px #00f2ff;
+            z-index: 30;
+            top: 0;
+            opacity: 0;
+        }
+
+        .scan-reveal-text.erasing .scan-line {
+            animation: scanUp 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+
+        .scan-reveal-text.revealing .scan-line {
+            animation: scanDown 2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+
+        .scan-reveal-text.erasing {
+            opacity: 0.4;
+            transition: opacity 1.5s ease;
+        }
+
+        .scan-reveal-text.revealing {
+            opacity: 1;
+            transition: opacity 0.3s ease;
+        }
+
+        /* Dossier paragraph container */
+        .dossier-scan-container {
+            position: relative;
+            overflow: hidden;
+            min-height: 100px;
+        }
+
+        .dossier-scan-container .scan-line {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: #00f2ff;
+            box-shadow: 0 0 15px #00f2ff, 0 0 30px #00f2ff;
+            z-index: 30;
+            top: 0;
+            opacity: 0;
+        }
+
+        .dossier-scan-container.erasing .scan-line {
+            animation: scanUp 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+
+        .dossier-scan-container.revealing .scan-line {
+            animation: scanDown 2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+
+        .dossier-scan-container.erasing p {
+            opacity: 0.4;
+            transition: opacity 1.5s ease;
+        }
+
+        .dossier-scan-container.revealing p {
+            opacity: 1;
+            transition: opacity 0.3s ease;
+        }
+
+        /* Image container - ONLY scan line, NO corruption effect */
+        .regenerating-image-container {
+            position: relative;
+        }
+
+        .regenerating-image-container .scan-line {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: #00f2ff;
+            box-shadow: 0 0 20px #00f2ff, 0 0 40px #00f2ff;
+            z-index: 30;
+            top: 0;
+            opacity: 0;
+        }
+
+        .regenerating-image-container.erasing .scan-line {
+            animation: scanUp 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+
+        .regenerating-image-container.revealing .scan-line {
+            animation: scanDown 2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+
+        .regenerating-image-container.erasing img {
+            opacity: 0.4;
+            transition: opacity 1.5s ease;
+        }
+
+        .regenerating-image-container.revealing img {
+            opacity: 0.8;
+            transition: opacity 0.3s ease;
+        }
+
         /* Typewriter Cursor */
         .cursor-active::after {
             content: '_';
@@ -131,6 +240,158 @@
             0% { background-position: 200% 0; }
             100% { background-position: -200% 0; }
         }
+
+        /* Image Regeneration Effects */
+        @keyframes corruptImage {
+            0% { filter: hue-rotate(0deg) saturate(1) brightness(1); }
+            20% { filter: hue-rotate(90deg) saturate(2) brightness(1.2); }
+            40% { filter: hue-rotate(180deg) saturate(0.5) brightness(0.8); }
+            60% { filter: hue-rotate(270deg) saturate(1.5) brightness(1.1); }
+            80% { filter: hue-rotate(360deg) saturate(0.8) brightness(0.9); }
+            100% { filter: hue-rotate(0deg) saturate(1) brightness(1); }
+        }
+
+        @keyframes rgbSplitRed {
+            0%, 100% { transform: translate(0, 0); }
+            25% { transform: translate(3px, 1px); }
+            50% { transform: translate(-2px, -1px); }
+            75% { transform: translate(2px, -2px); }
+        }
+
+        @keyframes rgbSplitBlue {
+            0%, 100% { transform: translate(0, 0); }
+            33% { transform: translate(-2px, 2px); }
+            66% { transform: translate(3px, -1px); }
+        }
+
+        @keyframes scanlineFlicker {
+            0%, 100% { opacity: 0.1; transform: translateY(0); }
+            50% { opacity: 0.3; transform: translateY(100%); }
+        }
+
+        .regenerating-image-wrapper {
+            position: relative;
+        }
+
+        .regenerating-image-wrapper::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #00f2ff, transparent);
+            animation: scanlineFlicker 0.5s linear infinite;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .regenerating-image {
+            animation: corruptImage 0.6s linear infinite;
+            position: relative;
+        }
+
+        .regenerating-image::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: inherit;
+            mix-blend-mode: screen;
+            opacity: 0.7;
+            animation: rgbSplitRed 0.4s ease-in-out infinite;
+            filter: sepia(1) hue-rotate(320deg) saturate(3);
+            pointer-events: none;
+        }
+
+        .regenerating-image::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: inherit;
+            mix-blend-mode: screen;
+            opacity: 0.7;
+            animation: rgbSplitBlue 0.3s ease-in-out infinite;
+            filter: sepia(1) hue-rotate(180deg) saturate(3);
+            pointer-events: none;
+        }
+
+        /* Text Deletion Effects */
+        @keyframes dataWipe {
+            0% {
+                clip-path: inset(0 0 0 0);
+                opacity: 1;
+                filter: blur(0px);
+            }
+            50% {
+                opacity: 0.5;
+                filter: blur(2px);
+            }
+            100% {
+                clip-path: inset(0 0 0 100%);
+                opacity: 0;
+                filter: blur(4px);
+            }
+        }
+
+        @keyframes cursorPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .deleting-text {
+            animation: dataWipe 0.4s ease-out forwards;
+            display: inline-block;
+        }
+
+        .regenerating-text-cursor {
+            display: inline-block;
+            width: 8px;
+            height: 12px;
+            background: #00f2ff;
+            margin-left: 4px;
+            animation: cursorPulse 0.8s ease-in-out infinite;
+            vertical-align: middle;
+            box-shadow: 0 0 8px #00f2ff;
+        }
+
+        /* Accessibility: Reduced Motion */
+        @media (prefers-reduced-motion: reduce) {
+            .regenerating-image,
+            .regenerating-image::before,
+            .regenerating-image::after,
+            .regenerating-image-wrapper::before,
+            .deleting-text,
+            .regenerating-text-cursor,
+            .scan-reveal-text .scan-line,
+            .dossier-scan-container .scan-line,
+            .regenerating-image-container .scan-line {
+                animation: none !important;
+            }
+
+            .deleting-text {
+                opacity: 0.5;
+            }
+
+            .scan-reveal-text.erasing,
+            .dossier-scan-container.erasing p,
+            .regenerating-image-container.erasing img {
+                opacity: 0.5;
+                transition: none;
+            }
+
+            .scan-reveal-text.revealing,
+            .dossier-scan-container.revealing p,
+            .regenerating-image-container.revealing img {
+                opacity: 1;
+                transition: none;
+            }
+        }
     </style>
 <script type="importmap">
 {
@@ -146,5 +407,6 @@
 <body>
     <div id="root"></div>
     <div class="scanline"></div>
+    <script type="module" src="/index.tsx"></script>
 </body>
 </html>
