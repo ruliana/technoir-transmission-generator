@@ -1,7 +1,7 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 import { SYSTEM_INSTRUCTION } from "../constants";
-import { LeadDetails, Lead, Transmission, Exposition, User } from "../types";
+import { LeadDetails, Lead, Transmission, Exposition, User, StyleGuide } from "../types";
 
 // Retrieve key from Local Storage (BYOK-only)
 const getApiKey = (): string | undefined => {
@@ -48,6 +48,45 @@ async function streamJson<T>(
   }
 }
 
+// Helper to format StyleGuide into a string for prompt injection
+export const formatStyleContext = (style: StyleGuide): string => {
+  return `STYLE CONTEXT:
+Visual Tone: ${style.visualTone}
+Color Palette: ${style.colorPalette}
+Atmospheric Details: ${style.atmosphericDetails}
+Narrative Voice: ${style.narrativeVoice}
+
+Apply these stylistic elements throughout your generation to maintain consistency.`;
+};
+
+// Generate a StyleGuide from a theme and selected preset
+export const generateStyleGuide = async (theme: string, presetGuide: StyleGuide, onUpdate?: (text: string) => void): Promise<StyleGuide> => {
+  const styleContext = formatStyleContext(presetGuide);
+  return streamJson<StyleGuide>(
+    'gemini-3-flash-preview',
+    `Theme: ${theme}
+
+${styleContext}
+
+Task: Generate a refined StyleGuide that adapts the preset style to the specific theme. Ensure the guide maintains consistency with the preset's aesthetic principles while being tailored to the theme's unique characteristics.`,
+    {
+      systemInstruction: SYSTEM_INSTRUCTION,
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          visualTone: { type: Type.STRING },
+          colorPalette: { type: Type.STRING },
+          atmosphericDetails: { type: Type.STRING },
+          narrativeVoice: { type: Type.STRING }
+        },
+        required: ['visualTone', 'colorPalette', 'atmosphericDetails', 'narrativeVoice']
+      }
+    },
+    onUpdate
+  );
+};
+
 // Step 1a: Generate Title and Setting
 export const generateTitleAndSetting = async (theme: string, onUpdate?: (text: string) => void): Promise<Pick<Transmission, 'title' | 'settingSummary'>> => {
   return streamJson<Pick<Transmission, 'title' | 'settingSummary'>>(
@@ -72,13 +111,16 @@ export const generateTitleAndSetting = async (theme: string, onUpdate?: (text: s
 };
 
 // Step 1b: Generate Exposition based on Title/Setting
-export const generateExposition = async (theme: string, title: string, settingSummary: string, onUpdate?: (text: string) => void): Promise<Exposition> => {
+export const generateExposition = async (theme: string, title: string, settingSummary: string, style: StyleGuide, onUpdate?: (text: string) => void): Promise<Exposition> => {
+  const styleContext = formatStyleContext(style);
   return streamJson<Exposition>(
     'gemini-3-flash-preview',
-    `Theme: ${theme}.
+    `${styleContext}
+
+Theme: ${theme}.
     Transmission Title: "${title}".
     Setting Summary: "${settingSummary}".
-    
+
     Based on the above, create detailed Exposition parameters (1 paragraph each) for:
     1. Technology (Unique tech quirks of this setting)
     2. Society (Class struggle, crime, or culture)
@@ -101,15 +143,18 @@ export const generateExposition = async (theme: string, title: string, settingSu
 };
 
 // Step 1c: Generate Leads based on everything so far
-export const generateLeads = async (theme: string, title: string, summary: string, exposition: Exposition, onUpdate?: (text: string) => void): Promise<Lead[]> => {
+export const generateLeads = async (theme: string, title: string, summary: string, exposition: Exposition, style: StyleGuide, onUpdate?: (text: string) => void): Promise<Lead[]> => {
+  const styleContext = formatStyleContext(style);
   const data = await streamJson<{ leads: Lead[] }>(
     'gemini-3-flash-preview',
-    `Context: A Technoir setting titled "${title}".
+    `${styleContext}
+
+Context: A Technoir setting titled "${title}".
     Summary: ${summary}
     Technology: ${exposition.technology}
     Society: ${exposition.society}
     Environment: ${exposition.environment}
-    
+
     Generate 36 leads: Exactly 6 leads for each of these 6 categories: Connections, Events, Locations, Objects, Threats, Factions.
     Each lead name should be 2-3 words. Description should be exactly 1 evocative sentence that ties into the exposition provided.`,
     {
@@ -141,15 +186,18 @@ export const generateLeads = async (theme: string, title: string, summary: strin
 };
 
 // Step 2: Generate Image (runs in background)
-export const generateTransmissionHeader = async (title: string, summary: string, exposition: Exposition): Promise<string | undefined> => {
+export const generateTransmissionHeader = async (title: string, summary: string, exposition: Exposition, style: StyleGuide): Promise<string | undefined> => {
   try {
+    const styleContext = `Color Palette: ${style.colorPalette}. Visual Tone: ${style.visualTone}.`;
     const ai = getAI();
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
-        parts: [{ text: `Cinematic wide-shot cyberpunk noir landscape for a setting titled "${title}". 
-        Context: ${summary}. 
-        Visual details: ${exposition.environment}. 
+        parts: [{ text: `${styleContext}
+
+Cinematic wide-shot cyberpunk noir landscape for a setting titled "${title}".
+        Context: ${summary}.
+        Visual details: ${exposition.environment}.
         Neon rain, heavy atmosphere, hyper-detailed, 8k resolution, cinematic lighting.` }]
       },
       config: { imageConfig: { aspectRatio: "16:9" } }
@@ -168,14 +216,18 @@ export const generateTransmissionHeader = async (title: string, summary: string,
 
 // Dossier Deep Dive (Part 1: Text)
 export const generateLeadInspectionText = async (
-  lead: Lead, 
-  title: string, 
-  summary: string, 
-  exposition: Exposition
+  lead: Lead,
+  title: string,
+  summary: string,
+  exposition: Exposition,
+  style: StyleGuide
 ): Promise<Pick<LeadDetails, 'sensory' | 'expandedDescription'>> => {
+  const styleContext = formatStyleContext(style);
   return streamJson<Pick<LeadDetails, 'sensory' | 'expandedDescription'>>(
     'gemini-3-flash-preview',
-    `Context: Technoir setting "${title}".
+    `${styleContext}
+
+Context: Technoir setting "${title}".
     Summary: ${summary}
     Exposition Data:
     - Tech: ${exposition.technology}
@@ -214,16 +266,18 @@ export const generateLeadInspectionText = async (
   );
 };
 
-// Dossier Deep Dive (Part 2: Image)
-export const generateLeadInspectionImage = async (
-  lead: Lead, 
-  title: string, 
-  summary: string, 
-  sensorySight: string
+// Unified Lead Image Generation (consolidates initial + regeneration)
+export const generateLeadImage = async (
+  lead: Lead,
+  settingContext: { title: string, summary: string },
+  expandedDescription: string,
+  sensory: LeadDetails['sensory'],
+  exposition: { environment: string, technology: string },
+  style: StyleGuide
 ): Promise<string | undefined> => {
   try {
     let focusDirective = '';
-    
+
     // Category specific visual directives to ensure correct subject matter
     switch(lead.category) {
         case 'Locations':
@@ -235,25 +289,42 @@ export const generateLeadInspectionImage = async (
         case 'Events':
             focusDirective = 'Dynamic scene, active situation, implied motion. Narrative focus.';
             break;
-        default: 
-            // Connections, Threats, Factions
+        case 'Threats':
+            focusDirective = 'Analyze the description to determine the main subject (person, group, environment, phenomenon, object, etc.) and focus the image accordingly. If it describes people or characters, show them. If it describes an environmental effect, phenomenon, or abstract threat, visualize that without people. Match the visual focus to what is being described.';
+            break;
+        default:
+            // Connections, Factions
             focusDirective = 'Character portrait or group shot. Distinct cyberpunk fashion, expressive, moody lighting. Focus on the individual(s).';
             break;
     }
-    
+
+    const styleContext = `Color Palette: ${style.colorPalette}. Visual Tone: ${style.visualTone}.`;
     const ai = getAI();
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
         parts: [
-          { text: `Cinematic cyberpunk noir visualization.
+          { text: `${styleContext}
+
+Cinematic cyberpunk noir visualization.
           Subject: "${lead.name}"
-          Descriptor: ${lead.description}
           Category: ${lead.category}
-          
-          Context: ${title}. ${summary}
-          Visual Flavor: ${sensorySight}
-          
+          Description: ${lead.description}
+
+          Setting Context: ${settingContext.title}. ${settingContext.summary}
+
+          Environmental Context:
+          - Technology: ${exposition.technology}
+          - Environment: ${exposition.environment}
+
+          Visual Details:
+          - Sight: ${sensory.sight}
+          - Sound: ${sensory.sound}
+          - Smell: ${sensory.smell}
+          - Vibe: ${sensory.vibe}
+
+          Scene Description: ${expandedDescription}
+
           Directive: ${focusDirective}
           Style: Gritty, shadow-heavy, high contrast, hyper-detailed, 8k resolution, cinematic lighting, volumetric fog.` }
         ]
@@ -279,16 +350,20 @@ export const regenerateSensoryField = async (
   lead: Lead,
   fieldName: 'sight' | 'sound' | 'smell' | 'vibe',
   currentSensory: LeadDetails['sensory'],
-  exposition: Exposition
+  exposition: Exposition,
+  style: StyleGuide
 ): Promise<string> => {
   const otherFields = Object.entries(currentSensory)
     .filter(([key]) => key !== fieldName)
     .map(([key, val]) => `${key}: ${val}`)
     .join('\n');
 
+  const styleContext = formatStyleContext(style);
   const result = await streamJson<{ [key: string]: string }>(
     'gemini-3-flash-preview',
-    `Context: Technoir lead "${lead.name}" (${lead.category}).
+    `${styleContext}
+
+Context: Technoir lead "${lead.name}" (${lead.category}).
     Description: ${lead.description}
 
     Exposition Context:
@@ -319,11 +394,15 @@ export const regenerateSensoryField = async (
 export const regenerateExpandedDescription = async (
   lead: Lead,
   sensory: LeadDetails['sensory'],
-  exposition: Exposition
+  exposition: Exposition,
+  style: StyleGuide
 ): Promise<string> => {
+  const styleContext = formatStyleContext(style);
   const result = await streamJson<{ expandedDescription: string }>(
     'gemini-3-flash-preview',
-    `Context: Technoir lead "${lead.name}" (${lead.category}).
+    `${styleContext}
+
+Context: Technoir lead "${lead.name}" (${lead.category}).
     Description: ${lead.description}
 
     Exposition Context:
@@ -353,95 +432,30 @@ export const regenerateExpandedDescription = async (
   return result.expandedDescription;
 };
 
-// Regenerate lead image with full context
-export const regenerateLeadImage = async (
-  lead: Lead,
-  sensory: LeadDetails['sensory'],
-  expandedDescription: string,
-  exposition: Exposition
-): Promise<string | undefined> => {
-  try {
-    let focusDirective = '';
-
-    switch(lead.category) {
-        case 'Locations':
-            focusDirective = 'Wide or medium shot of the environment/location. Architecture, mood, lighting. NO central character. Environmental focus.';
-            break;
-        case 'Objects':
-            focusDirective = 'Close-up product shot or macro detail of the object. High texture. Object is the sole subject. No people.';
-            break;
-        case 'Events':
-            focusDirective = 'Dynamic scene, active situation, implied motion. Narrative focus.';
-            break;
-        default:
-            focusDirective = 'Character portrait or group shot. Distinct cyberpunk fashion, expressive, moody lighting. Focus on the individual(s).';
-            break;
-    }
-
-    const ai = getAI();
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
-      contents: {
-        parts: [
-          { text: `Cinematic cyberpunk noir visualization.
-          Subject: "${lead.name}"
-          Category: ${lead.category}
-          Description: ${lead.description}
-
-          Environmental Context:
-          - Technology: ${exposition.technology}
-          - Environment: ${exposition.environment}
-
-          Visual Details:
-          - Sight: ${sensory.sight}
-          - Sound: ${sensory.sound}
-          - Smell: ${sensory.smell}
-          - Vibe: ${sensory.vibe}
-
-          Scene Description: ${expandedDescription}
-
-          Directive: ${focusDirective}
-          Style: Gritty, shadow-heavy, high contrast, hyper-detailed, 8k resolution, cinematic lighting, volumetric fog.` }
-        ]
-      },
-      config: {
-        imageConfig: { aspectRatio: "1:1" }
-      }
-    });
-
-    for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) {
-        return `data:image/png;base64,${part.inlineData.data}`;
-      }
-    }
-  } catch (e) {
-    console.error("Lead image regeneration failed", e);
-  }
-  return undefined;
-};
 
 // --- NEW: BACKGROUND GENERATION ---
 // This runs the full pipeline for ALL leads. Expensive!
 export const generateFullTransmission = async (
     theme: string,
+    style: StyleGuide,
     onLog: (msg: string) => void
 ): Promise<Transmission> => {
-    
+
     // 1. Structure
     onLog(">> GENERATING STRUCTURAL FRAMEWORK...");
     const { title, settingSummary } = await generateTitleAndSetting(theme);
-    
+
     onLog(`>> STRUCTURE ACQUIRED: ${title}`);
     onLog(">> DOWNLOADING EXPOSITION...");
-    const exposition = await generateExposition(theme, title, settingSummary);
-    
+    const exposition = await generateExposition(theme, title, settingSummary, style);
+
     onLog(">> COMPILING LEAD NETWORK...");
-    const leads = await generateLeads(theme, title, settingSummary, exposition);
+    const leads = await generateLeads(theme, title, settingSummary, exposition, style);
 
     // 2. Header
     onLog(">> RENDERING ENVIRONMENTAL VISUALS...");
-    const headerImageUrl = await generateTransmissionHeader(title, settingSummary, exposition);
-    
+    const headerImageUrl = await generateTransmissionHeader(title, settingSummary, exposition, style);
+
     let transmission: Transmission = {
         id: Date.now(),
         createdAt: new Date().toLocaleDateString('en-US'),
@@ -454,20 +468,27 @@ export const generateFullTransmission = async (
 
     // 3. Batch Process Leads (Sequential to avoid rate limits)
     onLog(`>> INITIATING DEEP SCAN OF ${leads.length} NODES. THIS WILL TAKE TIME...`);
-    
+
     const detailedLeads: Lead[] = [];
-    
+
     for (let i = 0; i < leads.length; i++) {
         const lead = leads[i];
         onLog(`>> PROCESSING NODE [${i+1}/${leads.length}]: ${lead.name}...`);
-        
+
         try {
             // Text Details
-            const textDetails = await generateLeadInspectionText(lead, title, settingSummary, exposition);
-            
+            const textDetails = await generateLeadInspectionText(lead, title, settingSummary, exposition, style);
+
             // Image Details
-            const imageUrl = await generateLeadInspectionImage(lead, title, settingSummary, textDetails.sensory.sight);
-            
+            const imageUrl = await generateLeadImage(
+                lead,
+                { title, summary: settingSummary },
+                textDetails.expandedDescription,
+                textDetails.sensory,
+                { environment: exposition.environment, technology: exposition.technology },
+                style
+            );
+
             detailedLeads.push({
                 ...lead,
                 details: {
@@ -483,6 +504,6 @@ export const generateFullTransmission = async (
 
     transmission.leads = detailedLeads;
     onLog(">> TRANSMISSION PACKAGE COMPLETE.");
-    
+
     return transmission;
 };

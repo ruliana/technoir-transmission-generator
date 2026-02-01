@@ -20,10 +20,25 @@ export interface Lead {
   details?: LeadDetails;
 }
 
+export interface StyleGuide {
+  visualTone: string;
+  colorPalette: string;
+  atmosphericDetails: string;
+  narrativeVoice: string;
+}
+
+export interface StylePreset {
+  id: string;
+  name: string;
+  description: string;
+  guide: StyleGuide;
+}
+
 export interface Exposition {
   technology: string;
   society: string;
   environment: string;
+  style: StyleGuide;
 }
 
 export interface Transmission {

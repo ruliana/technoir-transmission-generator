@@ -1,9 +1,11 @@
 
-import { Transmission } from '../types';
+import { Transmission, StylePreset } from '../types';
+import { DEFAULT_STYLE_PRESETS } from '../constants';
 
 const DB_NAME = 'TechnoirDB';
 const STORE_NAME = 'transmissions';
-const DB_VERSION = 1;
+const STYLE_PRESETS_STORE = 'stylePresets';
+const DB_VERSION = 2;
 
 const initDB = (): Promise<IDBDatabase> => {
   return new Promise((resolve, reject) => {
@@ -16,6 +18,9 @@ const initDB = (): Promise<IDBDatabase> => {
       const db = (event.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains(STYLE_PRESETS_STORE)) {
+        db.createObjectStore(STYLE_PRESETS_STORE, { keyPath: 'id' });
       }
     };
   });
@@ -138,7 +143,7 @@ export const exportTransmission = async (transmission: Transmission) => {
 
 export const importTransmission = async (file: File): Promise<void> => {
     let transmission: Transmission;
-    
+
     try {
         if (file.name.endsWith('.gz') || file.name.endsWith('.json.gz')) {
              if (!('DecompressionStream' in window)) {
@@ -163,4 +168,57 @@ export const importTransmission = async (file: File): Promise<void> => {
     } catch (err) {
         throw err;
     }
+};
+
+// Style Preset Functions
+export const saveStylePreset = async (preset: StylePreset): Promise<void> => {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STYLE_PRESETS_STORE, 'readwrite');
+    const store = tx.objectStore(STYLE_PRESETS_STORE);
+    const request = store.put(preset);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+};
+
+export const deleteStylePreset = async (id: string): Promise<void> => {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STYLE_PRESETS_STORE, 'readwrite');
+    const store = tx.objectStore(STYLE_PRESETS_STORE);
+    const request = store.delete(id);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+};
+
+export const getAllStylePresets = async (): Promise<StylePreset[]> => {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STYLE_PRESETS_STORE, 'readonly');
+    const store = tx.objectStore(STYLE_PRESETS_STORE);
+    const request = store.getAll();
+    request.onsuccess = () => {
+      const results = request.result as StylePreset[];
+      resolve(results);
+    };
+    request.onerror = () => reject(request.error);
+  });
+};
+
+export const initializeDefaultPresets = async (): Promise<void> => {
+  try {
+    const existing = await getAllStylePresets();
+    if (existing.length > 0) {
+      return; // Already initialized
+    }
+
+    // Save all default presets
+    for (const preset of DEFAULT_STYLE_PRESETS) {
+      await saveStylePreset(preset);
+    }
+  } catch (err) {
+    console.error("Failed to initialize default presets", err);
+  }
 };

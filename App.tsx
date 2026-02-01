@@ -1,19 +1,18 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { CloudManifestItem, GameState, Lead, LeadDetails, Transmission, User } from './types';
+import { CloudManifestItem, GameState, Lead, LeadDetails, Transmission, User, Exposition, StyleGuide, StylePreset } from './types';
 import {
   generateTitleAndSetting,
   generateExposition,
   generateLeads,
   generateTransmissionHeader,
   generateLeadInspectionText,
-  generateLeadInspectionImage,
+  generateLeadImage,
   generateFullTransmission,
   regenerateSensoryField,
-  regenerateExpandedDescription,
-  regenerateLeadImage
+  regenerateExpandedDescription
 } from './services/gemini';
-import { saveTransmission, getAllTransmissions, deleteTransmission, exportTransmission, importTransmission } from './services/db';
+import { saveTransmission, getAllTransmissions, deleteTransmission, exportTransmission, importTransmission, initializeDefaultPresets, getAllStylePresets, saveStylePreset, deleteStylePreset } from './services/db';
 import { initGoogleClient, signIn, fetchCloudManifest, fetchCloudTransmission, uploadTransmissionToCloud } from './services/cloud';
 import { CATEGORIES } from './constants';
 
@@ -83,6 +82,7 @@ const useReverseTypewriter = (text: string, speed: number = 5, startTrigger: boo
   return { displayedText: text.slice(0, index), isComplete };
 };
 
+
 const App: React.FC = () => {
   const [state, setState] = useState<GameState>({
     transmission: null,
@@ -92,7 +92,7 @@ const App: React.FC = () => {
   const [isImageRevealed, setIsImageRevealed] = useState(false);
   const [themeInput, setThemeInput] = useState('Neo-Tokyo 2099 - Yakuza Cyber-War');
   const [loadingMessage, setLoadingMessage] = useState('');
-  
+
   // Data State
   const [localArchives, setLocalArchives] = useState<Transmission[]>([]);
   const [cloudArchives, setCloudArchives] = useState<CloudManifestItem[]>([]);
@@ -103,7 +103,14 @@ const App: React.FC = () => {
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [hasApiKey, setHasManualKey] = useState(false);
   const [isBulkGenerating, setIsBulkGenerating] = useState(false);
-  
+
+  // Style System State
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+  const [showStyleLibrary, setShowStyleLibrary] = useState(false);
+  const [customizedStyle, setCustomizedStyle] = useState<StyleGuide | null>(null);
+  const [showStylePreview, setShowStylePreview] = useState(false);
+  const [stylePresets, setStylePresets] = useState<StylePreset[]>([]);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Initialize
@@ -111,11 +118,25 @@ const App: React.FC = () => {
     loadLocalArchives();
     loadCloudArchives();
     checkManualKey();
-    
+    initializeStylePresets();
+
     initGoogleClient((u) => {
         setUser(u);
     });
   }, []);
+
+  const initializeStylePresets = async () => {
+    try {
+      await initializeDefaultPresets();
+      const presets = await getAllStylePresets();
+      setStylePresets(presets);
+      if (presets.length > 0 && !selectedPresetId) {
+        setSelectedPresetId(presets[0].id);
+      }
+    } catch (e) {
+      console.error("Failed to initialize style presets", e);
+    }
+  };
 
   const checkManualKey = () => {
       const k = localStorage.getItem('technoir_api_key');
@@ -123,7 +144,12 @@ const App: React.FC = () => {
   };
 
   const loadLocalArchives = async () => {
-      try { setLocalArchives(await getAllTransmissions()); } catch (e) { console.error(e); }
+      try {
+        const transmissions = await getAllTransmissions();
+        setLocalArchives(transmissions);
+      } catch (e) {
+        console.error(e);
+      }
   };
 
   const loadCloudArchives = async () => {
@@ -153,13 +179,30 @@ const App: React.FC = () => {
 
     setState(prev => ({ ...prev, status: 'loading' }));
     setLoadingMessage('INITIALIZING NEURAL UPLINK...');
-    
+
     try {
+      // Get selected style guide - always required
+      let selectedStyle: StyleGuide | null = customizedStyle;
+      if (!selectedStyle && selectedPresetId) {
+        const preset = stylePresets.find(p => p.id === selectedPresetId);
+        if (preset) {
+          selectedStyle = preset.guide;
+        }
+      }
+      // Fallback to first preset if none selected
+      if (!selectedStyle && stylePresets.length > 0) {
+        selectedStyle = stylePresets[0].guide;
+      }
+      // Ensure style is always present
+      if (!selectedStyle) {
+        throw new Error("No style guide available. Please refresh and try again.");
+      }
+
       if (isBulkGenerating) {
           // BACKGROUND BULK MODE
           setLoadingMessage('>> INITIATING FULL-SPECTRUM GENERATION PROTOCOL...\n>> THIS PROCESS MAY TAKE SEVERAL MINUTES.');
-          const t = await generateFullTransmission(themeInput, (msg) => setLoadingMessage(msg));
-          
+          const t = await generateFullTransmission(themeInput, selectedStyle as StyleGuide, (msg) => setLoadingMessage(msg));
+
           await saveTransmission(t);
           await loadLocalArchives();
           setState({ transmission: t, status: 'viewing' });
@@ -168,21 +211,21 @@ const App: React.FC = () => {
           // INTERACTIVE MODE (Standard)
           setLoadingMessage('>> ESTABLISHING SECURE CONNECTION...');
           const titleData = await generateTitleAndSetting(themeInput, (text) => setLoadingMessage(`>> GENERATING IDENTITY PROTOCOLS...\n\n${text}`));
-          
-          const exposition = await generateExposition(themeInput, titleData.title, titleData.settingSummary, (text) => setLoadingMessage(`>> DOWNLOADING SECTOR EXPOSITION...\n\n${text}`));
-          
-          const headerPromise = generateTransmissionHeader(titleData.title, titleData.settingSummary, exposition);
-          
-          const leads = await generateLeads(themeInput, titleData.title, titleData.settingSummary, exposition, (text) => setLoadingMessage(`>> COMPILING NETWORK NODES...\n\n${text}`));
-          
+
+          const exposition = await generateExposition(themeInput, titleData.title, titleData.settingSummary, selectedStyle as StyleGuide, (text) => setLoadingMessage(`>> DOWNLOADING SECTOR EXPOSITION...\n\n${text}`));
+
+          const headerPromise = generateTransmissionHeader(titleData.title, titleData.settingSummary, exposition, selectedStyle as StyleGuide);
+
+          const leads = await generateLeads(themeInput, titleData.title, titleData.settingSummary, exposition, selectedStyle as StyleGuide, (text) => setLoadingMessage(`>> COMPILING NETWORK NODES...\n\n${text}`));
+
           const transmission: Transmission = {
             id: Date.now(),
             createdAt: new Date().toLocaleDateString('en-US'),
             title: titleData.title,
             settingSummary: titleData.settingSummary,
-            exposition,
+            exposition: { ...exposition, style: selectedStyle as StyleGuide },
             leads,
-            headerImageUrl: undefined 
+            headerImageUrl: undefined
           };
 
           setState({ transmission, status: 'viewing' });
@@ -228,7 +271,7 @@ const App: React.FC = () => {
       try {
           const t = await fetchCloudTransmission(filename);
           // Save locally so we can view it
-          await saveTransmission(t); 
+          await saveTransmission(t);
           await loadLocalArchives();
           setState({ transmission: t, status: 'viewing' });
       } catch (e) {
@@ -242,9 +285,62 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen flex flex-col md:flex-row bg-black overflow-hidden font-mono text-gray-400">
         {showKeyModal && (
-            <ApiKeyModal 
+            <ApiKeyModal
                 onClose={() => setShowKeyModal(false)}
                 onSubmit={handleManualKeySubmit}
+            />
+        )}
+
+        {showStylePreview && customizedStyle && (
+            <StylePreviewModal
+                onClose={() => setShowStylePreview(false)}
+                initialStyle={customizedStyle}
+                onSaveChanges={(style) => {
+                  setCustomizedStyle(style);
+                  setShowStylePreview(false);
+                }}
+                onSaveAsPreset={async (name, description, style) => {
+                  try {
+                    const newPreset: StylePreset = {
+                      id: `custom-${Date.now()}`,
+                      name,
+                      description,
+                      guide: style
+                    };
+                    await saveStylePreset(newPreset);
+                    const updated = await getAllStylePresets();
+                    setStylePresets(updated);
+                    setSelectedPresetId(newPreset.id);
+                    setCustomizedStyle(null);
+                  } catch (e) {
+                    console.error("Failed to save preset", e);
+                    alert("Failed to save preset");
+                  }
+                }}
+            />
+        )}
+
+        {showStyleLibrary && (
+            <StyleLibraryModal
+                onClose={() => setShowStyleLibrary(false)}
+                presets={stylePresets}
+                onSelectPreset={(preset) => {
+                  setSelectedPresetId(preset.id);
+                  setCustomizedStyle(null);
+                }}
+                onDeletePreset={async (id) => {
+                  try {
+                    await deleteStylePreset(id);
+                    const updated = await getAllStylePresets();
+                    setStylePresets(updated);
+                    if (selectedPresetId === id) {
+                      setSelectedPresetId(updated.length > 0 ? updated[0].id : null);
+                    }
+                  } catch (e) {
+                    console.error("Failed to delete preset", e);
+                    alert("Failed to delete preset");
+                  }
+                }}
             />
         )}
         
@@ -319,6 +415,48 @@ const App: React.FC = () => {
                         onChange={(e) => setThemeInput(e.target.value)}
                         placeholder="Define Simulation Parameters (Theme, Year, Conflict)..."
                     />
+
+                    {/* Style Preset Selector */}
+                    <div className="space-y-2">
+                      <label className="block text-[9px] uppercase tracking-wider text-cyan-700 font-bold">Style_Preset</label>
+                      <div className="flex gap-2">
+                        <select
+                          value={selectedPresetId || ''}
+                          onChange={(e) => {
+                            setSelectedPresetId(e.target.value || null);
+                            setCustomizedStyle(null);
+                          }}
+                          className="flex-1 bg-black border border-cyan-900/50 p-3 text-xs font-mono text-cyan-100 focus:border-cyan-500 outline-none transition-all cursor-pointer"
+                        >
+                          <option value="">-- Select Preset --</option>
+                          {stylePresets.map(preset => (
+                            <option key={preset.id} value={preset.id}>{preset.name}</option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => setShowStyleLibrary(true)}
+                          className="text-[9px] bg-cyan-950/40 hover:bg-cyan-900 border border-cyan-900/50 px-3 py-2 text-cyan-600 uppercase tracking-wider transition-colors"
+                        >
+                          Library
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (selectedPresetId) {
+                              const preset = stylePresets.find(p => p.id === selectedPresetId);
+                              if (preset) {
+                                setCustomizedStyle({ ...preset.guide });
+                                setShowStylePreview(true);
+                              }
+                            }
+                          }}
+                          disabled={!selectedPresetId}
+                          className="text-[9px] bg-cyan-950/40 hover:bg-cyan-900 border border-cyan-900/50 px-3 py-2 text-cyan-600 uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Customize
+                        </button>
+                      </div>
+                    </div>
+
                     <button
                         onClick={handleGenerate}
                         disabled={!canGenerate}
@@ -483,11 +621,18 @@ const App: React.FC = () => {
     setIsImageRevealed(false);
 
     try {
-      const textDetails = await generateLeadInspectionText(lead, t.title, t.settingSummary, t.exposition);
+      const textDetails = await generateLeadInspectionText(lead, t.title, t.settingSummary, t.exposition, t.exposition.style);
       const leadWithText = { ...lead, details: { ...textDetails, expandedDescription: textDetails.expandedDescription } };
       setActiveLead({ lead: leadWithText, details: leadWithText.details });
 
-      const imageUrl = await generateLeadInspectionImage(lead, t.title, t.settingSummary, textDetails.sensory.sight);
+      const imageUrl = await generateLeadImage(
+        lead,
+        { title: t.title, summary: t.settingSummary },
+        textDetails.expandedDescription,
+        textDetails.sensory,
+        { environment: t.exposition.environment, technology: t.exposition.technology },
+        t.exposition.style
+      );
       const finalDetails = { ...textDetails, imageUrl };
 
       setState(prev => {
@@ -520,28 +665,33 @@ const App: React.FC = () => {
 
     try {
       let updatedDetails = { ...lead.details };
+      const style = state.transmission.exposition.style;
 
       if (fieldType === 'sensory' && sensoryField) {
         const newValue = await regenerateSensoryField(
           lead,
           sensoryField,
           lead.details.sensory,
-          state.transmission.exposition
+          state.transmission.exposition,
+          style
         );
         updatedDetails.sensory = { ...lead.details.sensory, [sensoryField]: newValue };
       } else if (fieldType === 'dossier') {
         const newDescription = await regenerateExpandedDescription(
           lead,
           lead.details.sensory,
-          state.transmission.exposition
+          state.transmission.exposition,
+          style
         );
         updatedDetails.expandedDescription = newDescription;
       } else if (fieldType === 'image') {
-        const newImageUrl = await regenerateLeadImage(
+        const newImageUrl = await generateLeadImage(
           lead,
-          lead.details.sensory,
+          { title: state.transmission.title, summary: state.transmission.settingSummary },
           lead.details.expandedDescription,
-          state.transmission.exposition
+          lead.details.sensory,
+          { environment: state.transmission.exposition.environment, technology: state.transmission.exposition.technology },
+          style
         );
         if (newImageUrl) {
           updatedDetails.imageUrl = newImageUrl;
@@ -571,12 +721,65 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-black text-gray-300 font-mono overflow-y-auto pb-20">
       {showKeyModal && (
-          <ApiKeyModal 
+          <ApiKeyModal
               onClose={() => setShowKeyModal(false)}
               onSubmit={handleManualKeySubmit}
           />
       )}
-      
+
+      {showStylePreview && customizedStyle && (
+          <StylePreviewModal
+              onClose={() => setShowStylePreview(false)}
+              initialStyle={customizedStyle}
+              onSaveChanges={(style) => {
+                setCustomizedStyle(style);
+                setShowStylePreview(false);
+              }}
+              onSaveAsPreset={async (name, description, style) => {
+                try {
+                  const newPreset: StylePreset = {
+                    id: `custom-${Date.now()}`,
+                    name,
+                    description,
+                    guide: style
+                  };
+                  await saveStylePreset(newPreset);
+                  const updated = await getAllStylePresets();
+                  setStylePresets(updated);
+                  setSelectedPresetId(newPreset.id);
+                  setCustomizedStyle(null);
+                } catch (e) {
+                  console.error("Failed to save preset", e);
+                  alert("Failed to save preset");
+                }
+              }}
+          />
+      )}
+
+      {showStyleLibrary && (
+          <StyleLibraryModal
+              onClose={() => setShowStyleLibrary(false)}
+              presets={stylePresets}
+              onSelectPreset={(preset) => {
+                setSelectedPresetId(preset.id);
+                setCustomizedStyle(null);
+              }}
+              onDeletePreset={async (id) => {
+                try {
+                  await deleteStylePreset(id);
+                  const updated = await getAllStylePresets();
+                  setStylePresets(updated);
+                  if (selectedPresetId === id) {
+                    setSelectedPresetId(updated.length > 0 ? updated[0].id : null);
+                  }
+                } catch (e) {
+                  console.error("Failed to delete preset", e);
+                  alert("Failed to delete preset");
+                }
+              }}
+          />
+      )}
+
       <div className="relative group min-h-[40vh] md:h-[50vh] w-full overflow-hidden border-b border-cyan-900/30 shadow-[0_10px_30px_rgba(0,0,0,1)] flex flex-col justify-end bg-gray-900">
         {t.headerImageUrl ? (
           <img src={t.headerImageUrl} className="absolute inset-0 w-full h-full object-cover opacity-60 grayscale group-hover:grayscale-0 transition-all duration-1000" alt="Transmission Header" />
@@ -616,6 +819,30 @@ const App: React.FC = () => {
               <p className="text-sm leading-relaxed text-gray-400 font-light">{(t.exposition as any)[key]}</p>
             </section>
           ))}
+
+          <section className="space-y-4 border-t border-cyan-950/50 pt-8">
+            <h2 className="text-cyan-800 text-[10px] font-bold uppercase tracking-[0.5em] border-b border-cyan-950 pb-2 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 bg-cyan-600 rounded-full" /> EXPOSITION: STYLE
+            </h2>
+            <div className="space-y-3 text-xs">
+              <div>
+                <span className="text-cyan-600 font-semibold">Visual Tone:</span>
+                <p className="text-gray-400 font-light mt-1">{t.exposition.style.visualTone}</p>
+              </div>
+              <div>
+                <span className="text-cyan-600 font-semibold">Color Palette:</span>
+                <p className="text-gray-400 font-light mt-1">{t.exposition.style.colorPalette}</p>
+              </div>
+              <div>
+                <span className="text-cyan-600 font-semibold">Atmospheric Details:</span>
+                <p className="text-gray-400 font-light mt-1">{t.exposition.style.atmosphericDetails}</p>
+              </div>
+              <div>
+                <span className="text-cyan-600 font-semibold">Narrative Voice:</span>
+                <p className="text-gray-400 font-light mt-1">{t.exposition.style.narrativeVoice}</p>
+              </div>
+            </div>
+          </section>
         </div>
 
         <div className="lg:col-span-2 space-y-6">
@@ -746,6 +973,209 @@ const ApiKeyModal: React.FC<{ onClose: () => void; onSubmit: (key: string) => vo
             </div>
         </div>
     );
+};
+
+const StylePreviewModal: React.FC<{
+  onClose: () => void;
+  initialStyle: StyleGuide;
+  onSaveChanges: (style: StyleGuide) => void;
+  onSaveAsPreset: (name: string, description: string, style: StyleGuide) => void;
+}> = ({ onClose, initialStyle, onSaveChanges, onSaveAsPreset }) => {
+  const [style, setStyle] = useState<StyleGuide>(initialStyle);
+  const [saveAsName, setSaveAsName] = useState('');
+  const [saveAsDesc, setSaveAsDesc] = useState('');
+  const [isSavingAs, setIsSavingAs] = useState(false);
+
+  const handleSaveAsPreset = async () => {
+    if (!saveAsName.trim()) {
+      alert('Preset name cannot be empty');
+      return;
+    }
+    await onSaveAsPreset(saveAsName, saveAsDesc, style);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[110] bg-black/90 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="w-full max-w-2xl cyber-border bg-black p-8 relative my-8">
+        <button onClick={onClose} className="absolute top-4 right-4 text-cyan-900 hover:text-cyan-400">X</button>
+        <h2 className="text-xl font-orbitron text-cyan-500 uppercase mb-6">Style_Preview</h2>
+
+        {!isSavingAs ? (
+          <>
+            <div className="space-y-4 max-h-[500px] overflow-y-auto custom-scrollbar mb-6">
+              <div>
+                <label className="block text-[9px] uppercase tracking-wider text-cyan-700 font-bold mb-2">Visual_Tone</label>
+                <textarea
+                  value={style.visualTone}
+                  onChange={(e) => setStyle({ ...style, visualTone: e.target.value })}
+                  className="w-full bg-black border border-cyan-900/50 p-3 text-xs font-mono text-cyan-100 focus:border-cyan-500 outline-none h-24 resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[9px] uppercase tracking-wider text-cyan-700 font-bold mb-2">Color_Palette</label>
+                <textarea
+                  value={style.colorPalette}
+                  onChange={(e) => setStyle({ ...style, colorPalette: e.target.value })}
+                  className="w-full bg-black border border-cyan-900/50 p-3 text-xs font-mono text-cyan-100 focus:border-cyan-500 outline-none h-24 resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[9px] uppercase tracking-wider text-cyan-700 font-bold mb-2">Atmospheric_Details</label>
+                <textarea
+                  value={style.atmosphericDetails}
+                  onChange={(e) => setStyle({ ...style, atmosphericDetails: e.target.value })}
+                  className="w-full bg-black border border-cyan-900/50 p-3 text-xs font-mono text-cyan-100 focus:border-cyan-500 outline-none h-24 resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[9px] uppercase tracking-wider text-cyan-700 font-bold mb-2">Narrative_Voice</label>
+                <textarea
+                  value={style.narrativeVoice}
+                  onChange={(e) => setStyle({ ...style, narrativeVoice: e.target.value })}
+                  className="w-full bg-black border border-cyan-900/50 p-3 text-xs font-mono text-cyan-100 focus:border-cyan-500 outline-none h-24 resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-4">
+              <button
+                onClick={() => onSaveChanges(style)}
+                className="flex-1 py-3 bg-cyan-950 text-cyan-400 border border-cyan-600 text-[10px] uppercase tracking-wider hover:bg-cyan-900 transition-colors"
+              >
+                Save_Changes
+              </button>
+              <button
+                onClick={() => setIsSavingAs(true)}
+                className="flex-1 py-3 bg-cyan-950/40 text-cyan-600 border border-cyan-900/50 text-[10px] uppercase tracking-wider hover:bg-cyan-900 transition-colors"
+              >
+                Save_As_New
+              </button>
+              <button
+                onClick={onClose}
+                className="flex-1 py-3 border border-red-900 text-red-800 text-[10px] uppercase tracking-wider hover:bg-red-900/10 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-[9px] uppercase tracking-wider text-cyan-700 font-bold mb-2">Preset_Name</label>
+                <input
+                  type="text"
+                  value={saveAsName}
+                  onChange={(e) => setSaveAsName(e.target.value)}
+                  className="w-full bg-black border border-cyan-900/50 p-3 text-xs font-mono text-cyan-100 focus:border-cyan-500 outline-none"
+                  placeholder="e.g., Custom Neon"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-[9px] uppercase tracking-wider text-cyan-700 font-bold mb-2">Description</label>
+                <textarea
+                  value={saveAsDesc}
+                  onChange={(e) => setSaveAsDesc(e.target.value)}
+                  className="w-full bg-black border border-cyan-900/50 p-3 text-xs font-mono text-cyan-100 focus:border-cyan-500 outline-none h-20 resize-none"
+                  placeholder="Brief description of this style..."
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-4">
+              <button
+                onClick={handleSaveAsPreset}
+                className="flex-1 py-3 bg-cyan-950 text-cyan-400 border border-cyan-600 text-[10px] uppercase tracking-wider hover:bg-cyan-900 transition-colors"
+              >
+                Create_Preset
+              </button>
+              <button
+                onClick={() => setIsSavingAs(false)}
+                className="flex-1 py-3 border border-red-900 text-red-800 text-[10px] uppercase tracking-wider hover:bg-red-900/10 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+interface StyleLibraryModalProps {
+  onClose: () => void;
+  presets: StylePreset[];
+  onSelectPreset: (preset: StylePreset) => void;
+  onDeletePreset: (id: string) => void;
+}
+
+const StyleLibraryModal: React.FC<StyleLibraryModalProps> = ({
+  onClose,
+  presets,
+  onSelectPreset,
+  onDeletePreset
+}) => {
+  const [defaultIds] = useState(new Set(['neon-chrome', 'rust-decay', 'shadow-deep']));
+
+  return (
+    <div className="fixed inset-0 z-[110] bg-black/90 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="w-full max-w-4xl cyber-border bg-black p-8 relative my-8">
+        <button onClick={onClose} className="absolute top-4 right-4 text-cyan-900 hover:text-cyan-400">X</button>
+        <h2 className="text-xl font-orbitron text-cyan-500 uppercase mb-6">Style_Library</h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto custom-scrollbar mb-6">
+          {presets.map(preset => (
+            <div
+              key={preset.id}
+              className="border border-cyan-900/50 bg-gray-950/50 p-4 hover:border-cyan-600 transition-all cursor-pointer group"
+              onClick={() => {
+                onSelectPreset(preset);
+                onClose();
+              }}
+            >
+              <div className="flex justify-between items-start mb-2">
+                <h3 className="text-sm font-bold text-cyan-400 group-hover:text-cyan-300">{preset.name}</h3>
+                {!defaultIds.has(preset.id) && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (confirm(`Delete preset "${preset.name}"?`)) {
+                        onDeletePreset(preset.id);
+                      }
+                    }}
+                    className="text-[9px] text-red-900 hover:text-red-500 uppercase"
+                  >
+                    Del
+                  </button>
+                )}
+              </div>
+              <p className="text-[9px] text-gray-500 italic line-clamp-2 mb-3">{preset.description}</p>
+              <div className="text-[8px] text-gray-600 space-y-1">
+                <p><span className="text-cyan-700">Tone:</span> {preset.guide.visualTone.substring(0, 40)}...</p>
+                <p><span className="text-cyan-700">Colors:</span> {preset.guide.colorPalette.substring(0, 40)}...</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex gap-4">
+          <button
+            onClick={onClose}
+            className="flex-1 py-3 bg-cyan-950 text-cyan-400 border border-cyan-600 text-[10px] uppercase tracking-wider hover:bg-cyan-900 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 const LeadDossier: React.FC<{
@@ -1015,7 +1445,7 @@ const LeadDossier: React.FC<{
                   : ''
               }`}>
                 <div className="scan-line" />
-                <img src={details.imageUrl} className="w-full h-full object-cover opacity-80" alt={lead.name} />
+                <img src={details.imageUrl} className="w-full h-full object-cover opacity-80 grayscale group-hover:grayscale-0 transition-all duration-1000" alt={lead.name} />
                 {isRegenerating === 'image' && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/80">
                     <div className="text-sm text-cyan-600 uppercase loading-indicator">
