@@ -1,7 +1,7 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 import { SYSTEM_INSTRUCTION } from "../constants";
-import { LeadDetails, Lead, Transmission, Exposition, User, StyleGuide } from "../types";
+import { LeadDetails, Lead, Transmission, Exposition, StyleGuide } from "../types";
 
 // Retrieve key from Local Storage (BYOK-only)
 const getApiKey = (): string | undefined => {
@@ -156,6 +156,7 @@ Context: A Technoir setting titled "${title}".
     Environment: ${exposition.environment}
 
     Generate 36 leads: Exactly 6 leads for each of these 6 categories: Connections, Events, Locations, Objects, Threats, Factions.
+    Note: When relevant, reflect varied backgrounds and presentations, but keep focus on their role in the story.
     Each lead name should be 2-3 words. Description should be exactly 1 evocative sentence that ties into the exposition provided.`,
     {
       systemInstruction: SYSTEM_INSTRUCTION,
@@ -239,7 +240,7 @@ Context: Technoir setting "${title}".
     - Category: ${lead.category}
     - Descriptor: ${lead.description}
 
-    Task: Generate a high-fidelity investigative dossier.
+    Task: Generate a high-fidelity investigative dossier. For human subjects, mention appearance briefly when relevant to characterization.
     1. Sensory Data: 4 distinct sensory inputs (Sight, Sound, Smell, Vibe) that immediately establish the scene/subject.
     2. Expanded Description: A hardboiled, atmospheric paragraph expanding on the "Descriptor" and integrating the "Exposition Data". It should feel like a GM describing the node to players.`,
     {
@@ -298,6 +299,9 @@ export const generateLeadImage = async (
             break;
     }
 
+    // Technoir-specific diversity note
+    const diversityDirective = `Note: Show varied human subjects naturally without defaulting to a single archetype.`;
+
     const styleContext = `Color Palette: ${style.colorPalette}. Visual Tone: ${style.visualTone}.`;
     const ai = getAI();
     const response = await ai.models.generateContent({
@@ -326,6 +330,9 @@ Cinematic cyberpunk noir visualization.
           Scene Description: ${expandedDescription}
 
           Directive: ${focusDirective}
+
+          ${diversityDirective}
+
           Style: Gritty, shadow-heavy, high contrast, hyper-detailed, 8k resolution, cinematic lighting, volumetric fog.` }
         ]
       },
@@ -416,7 +423,7 @@ Context: Technoir lead "${lead.name}" (${lead.category}).
     - Smell: ${sensory.smell}
     - Vibe: ${sensory.vibe}
 
-    Task: Generate a hardboiled, atmospheric paragraph (expanded description) that integrates the sensory data and exposition. It should feel like a GM describing this node to players in a Technoir game.`,
+    Task: Generate a hardboiled, atmospheric paragraph (expanded description) that integrates the sensory data and exposition. For human subjects, mention appearance briefly when relevant to characterization. It should feel like a GM describing this node to players in a Technoir game.`,
     {
       systemInstruction: SYSTEM_INSTRUCTION,
       responseMimeType: 'application/json',

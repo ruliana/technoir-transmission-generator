@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# AI assistant scratch dirs
+.claude/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

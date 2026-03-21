@@ -1,6 +1,10 @@
 
 import { Category, StylePreset } from './types';
 
+// --- GCS CONFIGURATION (READ-ONLY) ---
+export const GCS_BUCKET_NAME = "technoir-transmission-hub";
+export const GCS_MANIFEST_FILE = "manifest.json";
+
 export const CATEGORIES: Category[] = [
   'Connections',
   'Events',
@@ -94,13 +98,17 @@ export const DEFAULT_STYLE_PRESETS: StylePreset[] = [
       atmosphericDetails: 'Darkness concealing detail, obscured faces, hidden chambers, muffled sounds, encrypted information',
       narrativeVoice: 'Cryptic and introspective, revealing secrets gradually through careful exposition'
     }
+  },
+  {
+    id: 'vinepunk',
+    name: 'Vinepunk',
+    description: 'Rebellious Nature',
+    guide: {
+      visualTone: 'Invasive organic technology sprawls across corroded infrastructure - data-vines snake through rust-eaten metal, mycelial-meshes pulse with neon-orange bio-electric rhythms. Everything feels alive, expanding, lush yet predatory. Green and cyan neon illuminate fungal growth patterns consuming concrete and flesh alike.',
+      colorPalette: 'Dominant green and cyan neon glow from bio-luminescent data-sap and living networks, punctuated by neon-orange pulsations in mycelial nodes. Rust-browns and corroded metal grays create harsh contrast against the vibrant, almost toxic vitality of the organic tech.',
+      atmosphericDetails: 'Oppressive heat and humidity saturate the air. Skin stays perpetually damp as bio-electric feedback tingles through contact with the mesh. Mutated nature reclaims everything aggressively - data-vines and fungal networks spread unchecked, forcing symbiotic connections through flesh and concrete. Humanity\'s engineered ecosystem has turned feral, and control slips further every day.',
+      narrativeVoice: 'Weary acceptance permeates observations of this new ecosystem. The old human/machine binary has dissolved - people are just another organism now, nodes in the mycelial network. Noir fatalism adapted to bio-tech reality, where resistance is just another form of connection eventually consumed by the mesh.'
+    }
   }
 ];
 
-// --- CONFIGURATION ---
-// Replace these with your actual values!
-export const GCS_BUCKET_NAME = "technoir-transmission-hub"; 
-export const GCS_MANIFEST_FILE = "manifest.json";
-// PASTE YOUR COPIED CLIENT ID HERE vvv
-export const GOOGLE_CLIENT_ID = "YOUR_NEW_CLIENT_ID_FROM_CONSOLE.apps.googleusercontent.com"; 
-export const MASTER_EMAIL = "ronie.uliana@gmail.com";

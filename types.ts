@@ -57,14 +57,6 @@ export interface GameState {
   error?: string;
 }
 
-export interface User {
-  email: string;
-  name: string;
-  picture: string;
-  accessToken?: string; // GCS Access Token
-  isMaster: boolean; // Is this the Owner?
-}
-
 export interface CloudManifestItem {
   id: number;
   title: string;

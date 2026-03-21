@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { CloudManifestItem, GameState, Lead, LeadDetails, Transmission, User, Exposition, StyleGuide, StylePreset } from './types';
+import { CloudManifestItem, GameState, Lead, LeadDetails, Transmission, Exposition, StyleGuide, StylePreset } from './types';
 import {
   generateTitleAndSetting,
   generateExposition,
@@ -13,7 +13,7 @@ import {
   regenerateExpandedDescription
 } from './services/gemini';
 import { saveTransmission, getAllTransmissions, deleteTransmission, exportTransmission, importTransmission, initializeDefaultPresets, getAllStylePresets, saveStylePreset, deleteStylePreset } from './services/db';
-import { initGoogleClient, signIn, fetchCloudManifest, fetchCloudTransmission, uploadTransmissionToCloud } from './services/cloud';
+import { fetchCloudManifest, fetchCloudTransmission } from './services/cloud';
 import { CATEGORIES } from './constants';
 
 // Simplified Typewriter hook
@@ -99,7 +99,6 @@ const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<'local' | 'cloud'>('cloud');
 
   // Auth State
-  const [user, setUser] = useState<User | null>(null);
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [hasApiKey, setHasManualKey] = useState(false);
   const [isBulkGenerating, setIsBulkGenerating] = useState(false);
@@ -119,10 +118,6 @@ const App: React.FC = () => {
     loadCloudArchives();
     checkManualKey();
     initializeStylePresets();
-
-    initGoogleClient((u) => {
-        setUser(u);
-    });
   }, []);
 
   const initializeStylePresets = async () => {
@@ -153,7 +148,25 @@ const App: React.FC = () => {
   };
 
   const loadCloudArchives = async () => {
-      try { setCloudArchives(await fetchCloudManifest()); } catch (e) { console.error(e); }
+      try {
+        setCloudArchives(await fetchCloudManifest());
+      } catch (e) {
+        console.error(e);
+      }
+  };
+
+  const handleCloudLoad = async (filename: string) => {
+      setState(prev => ({ ...prev, status: 'loading' }));
+      setLoadingMessage('>> DOWNLOADING ENCRYPTED PACKET FROM CLOUD STORAGE...');
+      try {
+          const t = await fetchCloudTransmission(filename);
+          // Save locally so we can view it
+          await saveTransmission(t);
+          await loadLocalArchives();
+          setState({ transmission: t, status: 'viewing' });
+      } catch (e) {
+          setState(prev => ({ ...prev, status: 'setup', error: "Download Failed." }));
+      }
   };
 
   const handleManualKeySubmit = (key: string) => {
@@ -169,7 +182,7 @@ const App: React.FC = () => {
 
   // --- Generation Handlers ---
 
-  const canGenerate = user || hasApiKey;
+  const canGenerate = hasApiKey;
 
   const handleGenerate = async () => {
     if (!canGenerate) {
@@ -246,37 +259,6 @@ const App: React.FC = () => {
       console.error(error);
       setState(prev => ({ ...prev, status: 'setup', error: "Transmission Interrupted. Check Protocol." }));
     }
-  };
-
-  const handleCloudUpload = async (t: Transmission, e: React.MouseEvent) => {
-      e.stopPropagation();
-      if (!user?.isMaster || !user.accessToken) return;
-      
-      const confirm = window.confirm(`UPLOAD WARNING: This will publish "${t.title}" to the public network.`);
-      if (!confirm) return;
-
-      try {
-          await uploadTransmissionToCloud(t, user.accessToken);
-          alert("UPLOAD COMPLETE.");
-          loadCloudArchives();
-      } catch (err) {
-          alert("UPLOAD FAILED.");
-          console.error(err);
-      }
-  };
-
-  const handleCloudLoad = async (filename: string) => {
-      setState(prev => ({ ...prev, status: 'loading' }));
-      setLoadingMessage('>> DOWNLOADING ENCRYPTED PACKET FROM CLOUD STORAGE...');
-      try {
-          const t = await fetchCloudTransmission(filename);
-          // Save locally so we can view it
-          await saveTransmission(t);
-          await loadLocalArchives();
-          setState({ transmission: t, status: 'viewing' });
-      } catch (e) {
-          setState(prev => ({ ...prev, status: 'setup', error: "Download Failed." }));
-      }
   };
 
   // --- Render ---
@@ -359,7 +341,6 @@ const App: React.FC = () => {
                 <div className="flex items-center gap-2">
                     <div className={`w-2 h-2 rounded-full ${hasApiKey ? 'bg-green-500 cyber-glow' : 'bg-red-900'}`} />
                     <span>{hasApiKey ? 'API_KEY_CONNECTED' : 'NO_API_KEY'}</span>
-                    {user && <span className="ml-2 text-gray-600">({user.name})</span>}
                 </div>
                 <div className="flex gap-2">
                     {!hasApiKey ? (
@@ -369,11 +350,6 @@ const App: React.FC = () => {
                     ) : (
                         <button onClick={handleDisconnectKey} className="text-red-800 hover:text-red-500 px-2 py-1">
                             Disconnect_Key
-                        </button>
-                    )}
-                    {!user && (
-                        <button onClick={signIn} className="text-gray-600 hover:text-gray-400 px-2 py-1" title="Optional: For cloud sync">
-                            Google_Sync
                         </button>
                     )}
                 </div>
@@ -480,16 +456,16 @@ const App: React.FC = () => {
         {/* RIGHT COLUMN: Archives */}
         <div className="w-full md:w-1/2 bg-gray-950 p-6 md:p-12 overflow-y-auto">
             <div className="max-w-md w-full mx-auto space-y-6">
-                
+
                 {/* Tabs */}
                 <div className="flex gap-4 border-b border-gray-900 pb-1">
-                    <button 
+                    <button
                         onClick={() => setViewMode('cloud')}
                         className={`text-[10px] uppercase tracking-[0.2em] font-bold pb-2 px-2 transition-colors ${viewMode === 'cloud' ? 'text-cyan-400 border-b-2 border-cyan-400' : 'text-gray-700 hover:text-gray-500'}`}
                     >
                         Public_Network
                     </button>
-                    <button 
+                    <button
                         onClick={() => setViewMode('local')}
                         className={`text-[10px] uppercase tracking-[0.2em] font-bold pb-2 px-2 transition-colors ${viewMode === 'local' ? 'text-green-500 border-b-2 border-green-500' : 'text-gray-700 hover:text-gray-500'}`}
                     >
@@ -524,7 +500,7 @@ const App: React.FC = () => {
                                         <span className="text-gray-700 text-[9px] font-mono">{new Date(arch.createdAt).toLocaleDateString()}</span>
                                     </div>
                                     <div className="text-[9px] text-gray-600 line-clamp-2 italic">{arch.summary}</div>
-                                    <button 
+                                    <button
                                         onClick={() => handleCloudLoad(arch.filename)}
                                         className="mt-2 w-full text-[9px] bg-cyan-950/20 hover:bg-cyan-900 text-cyan-600 border border-cyan-900/50 py-2 uppercase tracking-wider transition-colors"
                                     >
@@ -545,20 +521,17 @@ const App: React.FC = () => {
                                     </div>
                                     <div className="text-[9px] text-gray-600 line-clamp-2 italic">{arch.settingSummary}</div>
                                     <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-900">
-                                        <button 
+                                        <button
                                             onClick={() => setState({ transmission: arch, status: 'viewing' })}
                                             className="flex-1 text-[9px] bg-green-950/20 hover:bg-green-900 text-green-600 border border-green-900/50 py-1 uppercase tracking-wider transition-colors"
                                         >
                                             Open
                                         </button>
-                                        <button onClick={(e) => exportTransmission(arch)} className="text-[9px] text-gray-600 hover:text-white px-1 uppercase" title="Export">Exp</button>
-                                        <button onClick={async (e) => { 
-                                            e.stopPropagation(); 
-                                            if(confirm('Delete?')) { await deleteTransmission(arch.id); loadLocalArchives(); } 
+                                        <button onClick={() => exportTransmission(arch)} className="text-[9px] text-gray-600 hover:text-white px-1 uppercase" title="Export">Exp</button>
+                                        <button onClick={async (e) => {
+                                            e.stopPropagation();
+                                            if(confirm('Delete?')) { await deleteTransmission(arch.id); loadLocalArchives(); }
                                         }} className="text-[9px] text-red-900 hover:text-red-500 px-1 uppercase" title="Delete">Del</button>
-                                        {user?.isMaster && (
-                                            <button onClick={(e) => handleCloudUpload(arch, e)} className="text-[9px] text-yellow-700 hover:text-yellow-500 px-1 uppercase" title="Upload to Cloud">Cloud</button>
-                                        )}
                                     </div>
                                 </div>
                             ))
@@ -1588,9 +1561,5 @@ const LeadDossier: React.FC<{
     </div>
   );
 };
-
-const SensoryItem: React.FC<{ label: string; value: string }> = ({ label, value }) => (
-    <div className="space-y-1"><div className="text-[9px] text-cyan-900 uppercase">{label}</div><div className="text-[10px] text-gray-400">{value}</div></div>
-);
 
 export default App;
