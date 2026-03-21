@@ -37,6 +37,10 @@ npm run dev          # http://localhost:3000
 
 Enter your Gemini API key in the UI when prompted. It is stored in your browser's localStorage only.
 
+## Live Demo
+
+🔗 **[https://technoir-transmission-engine.onrender.com](https://technoir-transmission-engine.onrender.com)**
+
 ## Deploy to Render
 
 The repo includes a `render.yaml` for zero-config static site deployment.
