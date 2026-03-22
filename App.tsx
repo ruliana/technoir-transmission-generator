@@ -13,8 +13,8 @@ import {
   regenerateExpandedDescription
 } from './services/gemini';
 import { saveTransmission, getAllTransmissions, deleteTransmission, exportTransmission, importTransmission, initializeDefaultPresets, getAllStylePresets, saveStylePreset, deleteStylePreset } from './services/db';
-import { fetchCloudManifest, fetchCloudTransmission } from './services/cloud';
-import { CATEGORIES } from './constants';
+import { fetchArchiveManifest, fetchArchiveTransmission } from './services/archive';
+import { ARCHIVE_URL_STORAGE_KEY, CATEGORIES, DEFAULT_ARCHIVE_URL } from './constants';
 
 // Simplified Typewriter hook
 const useTypewriter = (text: string, speed: number = 10, startTrigger: boolean = true) => {
@@ -98,6 +98,15 @@ const App: React.FC = () => {
   const [cloudArchives, setCloudArchives] = useState<CloudManifestItem[]>([]);
   const [viewMode, setViewMode] = useState<'local' | 'cloud'>('cloud');
 
+  // Archive URL configuration state
+  const [archiveUrl, setArchiveUrl] = useState<string>(
+    () => (localStorage.getItem(ARCHIVE_URL_STORAGE_KEY) ?? DEFAULT_ARCHIVE_URL)
+  );
+  const [showArchiveConfig, setShowArchiveConfig] = useState(false);
+  const [archiveUrlInput, setArchiveUrlInput] = useState('');
+  const [archiveUrlError, setArchiveUrlError] = useState('');
+  const [isValidatingArchiveUrl, setIsValidatingArchiveUrl] = useState(false);
+
   // Auth State
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [hasApiKey, setHasManualKey] = useState(false);
@@ -147,9 +156,9 @@ const App: React.FC = () => {
       }
   };
 
-  const loadCloudArchives = async () => {
+  const loadCloudArchives = async (baseUrl?: string) => {
       try {
-        setCloudArchives(await fetchCloudManifest());
+        setCloudArchives(await fetchArchiveManifest(baseUrl ?? archiveUrl));
       } catch (e) {
         console.error(e);
       }
@@ -157,9 +166,9 @@ const App: React.FC = () => {
 
   const handleCloudLoad = async (filename: string) => {
       setState(prev => ({ ...prev, status: 'loading' }));
-      setLoadingMessage('>> DOWNLOADING ENCRYPTED PACKET FROM CLOUD STORAGE...');
+      setLoadingMessage('>> DOWNLOADING ENCRYPTED PACKET FROM ARCHIVE...');
       try {
-          const t = await fetchCloudTransmission(filename);
+          const t = await fetchArchiveTransmission(filename, archiveUrl);
           // Save locally so we can view it
           await saveTransmission(t);
           await loadLocalArchives();
@@ -167,6 +176,36 @@ const App: React.FC = () => {
       } catch (e) {
           setState(prev => ({ ...prev, status: 'setup', error: "Download Failed." }));
       }
+  };
+
+  const handleArchiveUrlConfirm = async () => {
+      const trimmed = archiveUrlInput.trim().replace(/\/+$/, '');
+      if (!trimmed) return;
+      setIsValidatingArchiveUrl(true);
+      setArchiveUrlError('');
+      try {
+          const res = await fetch(`${trimmed}/manifest.json?t=${Date.now()}`);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          await res.json(); // ensure it's valid JSON
+          localStorage.setItem(ARCHIVE_URL_STORAGE_KEY, trimmed);
+          setArchiveUrl(trimmed);
+          setShowArchiveConfig(false);
+          setArchiveUrlInput('');
+          loadCloudArchives(trimmed);
+      } catch (e) {
+          setArchiveUrlError('Could not reach manifest at that URL');
+      } finally {
+          setIsValidatingArchiveUrl(false);
+      }
+  };
+
+  const handleArchiveUrlReset = () => {
+      localStorage.removeItem(ARCHIVE_URL_STORAGE_KEY);
+      setArchiveUrl(DEFAULT_ARCHIVE_URL);
+      setShowArchiveConfig(false);
+      setArchiveUrlInput('');
+      setArchiveUrlError('');
+      loadCloudArchives(DEFAULT_ARCHIVE_URL);
   };
 
   const handleManualKeySubmit = (key: string) => {
@@ -488,10 +527,59 @@ const App: React.FC = () => {
                     )}
                 </div>
 
+                {/* Archive URL configuration row (Public_Network only) */}
+                {viewMode === 'cloud' && (
+                    <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                            <span className="text-[8px] text-gray-700 uppercase tracking-widest font-mono truncate flex-1">
+                                SOURCE: {archiveUrl}
+                            </span>
+                            <button
+                                onClick={() => { setShowArchiveConfig(v => !v); setArchiveUrlInput(archiveUrl); setArchiveUrlError(''); }}
+                                className="text-[8px] text-cyan-900 hover:text-cyan-400 uppercase shrink-0"
+                            >
+                                {showArchiveConfig ? '[ Cancel ]' : '[ Configure ]'}
+                            </button>
+                            {archiveUrl !== DEFAULT_ARCHIVE_URL && (
+                                <button
+                                    onClick={handleArchiveUrlReset}
+                                    className="text-[8px] text-gray-700 hover:text-red-500 uppercase shrink-0"
+                                >
+                                    [ Reset ]
+                                </button>
+                            )}
+                        </div>
+                        {showArchiveConfig && (
+                            <div className="space-y-1">
+                                <div className="flex gap-1">
+                                    <input
+                                        type="text"
+                                        value={archiveUrlInput}
+                                        onChange={e => { setArchiveUrlInput(e.target.value); setArchiveUrlError(''); }}
+                                        onKeyDown={e => { if (e.key === 'Enter') handleArchiveUrlConfirm(); }}
+                                        placeholder="https://example.com/archives"
+                                        className="flex-1 bg-black border border-cyan-900/50 text-cyan-400 text-[9px] font-mono px-2 py-1 outline-none focus:border-cyan-500 placeholder-gray-700"
+                                    />
+                                    <button
+                                        onClick={handleArchiveUrlConfirm}
+                                        disabled={isValidatingArchiveUrl || !archiveUrlInput.trim()}
+                                        className="text-[8px] bg-cyan-950/30 hover:bg-cyan-900 text-cyan-500 border border-cyan-900/50 px-2 py-1 uppercase disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                                    >
+                                        {isValidatingArchiveUrl ? '...' : '[ OK ]'}
+                                    </button>
+                                </div>
+                                {archiveUrlError && (
+                                    <div className="text-[8px] text-red-500 font-mono">{archiveUrlError}</div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 <div className="space-y-2 min-h-[300px]">
                     {viewMode === 'cloud' ? (
                         cloudArchives.length === 0 ? (
-                            <div className="text-center py-10 opacity-30 text-[10px] uppercase">Connecting to Satellite...</div>
+                            <div className="text-center py-10 opacity-30 text-[10px] uppercase">No transmissions found</div>
                         ) : (
                             cloudArchives.map(arch => (
                                 <div key={arch.id} className="group relative border border-gray-900 bg-black/40 p-4 hover:border-cyan-800 transition-all flex flex-col gap-2">

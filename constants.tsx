@@ -1,9 +1,11 @@
 
 import { Category, StylePreset } from './types';
 
-// --- GCS CONFIGURATION (READ-ONLY) ---
-export const GCS_BUCKET_NAME = "technoir-transmission-hub";
-export const GCS_MANIFEST_FILE = "manifest.json";
+// --- ARCHIVE CONFIGURATION ---
+/** Default base URL for the public archive (served from /public/archives in dev, /archives in prod) */
+export const DEFAULT_ARCHIVE_URL = '/archives';
+/** localStorage key used to persist a custom archive base URL */
+export const ARCHIVE_URL_STORAGE_KEY = 'technoir_archive_url';
 
 export const CATEGORIES: Category[] = [
   'Connections',

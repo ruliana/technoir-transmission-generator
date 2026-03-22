@@ -29,7 +29,7 @@ The app follows a **service-oriented component architecture** with a single root
 
 - **App.tsx** (~654 lines): Main React component managing UI state, generation workflows, and user interactions
 - **services/gemini.ts**: Gemini API integration for content generation (titles, exposition, leads, images)
-- **services/cloud.ts**: Google Cloud Storage operations and OAuth authentication
+- **services/archive.ts**: URL-based public archive fetching (manifest + individual transmissions)
 - **services/db.ts**: IndexedDB (`TechnoirDB`) for local data persistence
 - **types.ts**: Centralized TypeScript type definitions
 - **constants.tsx**: Configuration (API keys, system prompts, master email, generation parameters)
@@ -77,9 +77,9 @@ Two modes:
 
 ### State Management
 - **Local Storage**: IndexedDB for transmissions (TechnoirDB)
-- **Cloud Storage**: Google Cloud Storage bucket (technoir-transmission-hub)
-- **Manifest System**: JSON manifest file tracks cloud-uploaded transmissions
-- **Auth**: Dual mode - Google OAuth2 for master users, manual key input for guests
+- **Public Archive**: Configurable base URL (default `/archives`); fetches `manifest.json` + individual files
+- **Manifest System**: JSON manifest at `{baseUrl}/manifest.json` lists available transmissions
+- **Archive URL override**: Stored in `localStorage` under `ARCHIVE_URL_STORAGE_KEY`; configurable via the Public_Network UI
 
 ### UI/Styling
 - Tailwind CSS (CDN) with custom cyberpunk theme
@@ -101,10 +101,13 @@ Two modes:
 - Graceful degradation when image generation fails
 - User-facing error messages in modal dialogs
 
-### Authentication
-- Master users (email matches MASTER_EMAIL constant): Full access via OAuth
-- Guest users: Manual API key input, limited to localStorage
-- OAuth token stored in localStorage for Cloud Storage access
+### Public Archive
+The Public_Network tab reads transmissions from a URL-based archive:
+- Default source: `public/archives/` (served as `/archives/` by Vite)
+- Operators drop `<id>.json` files in `public/archives/` and add entries to `manifest.json`
+- Users can override the source URL at runtime via **[ Configure ]** in the tab
+- Custom URL is validated (must serve a valid `manifest.json`) before saving to `localStorage`
+- **[ Reset ]** restores the default `/archives` source
 
 ### Deployment
 Built as Google AI Studio app with environment variables injected at build time. `.env.local` used for local development only (not in CI/production).
@@ -129,8 +132,8 @@ Edit `constants.tsx` to customize:
 - System prompts for each generation stage
 - Gemini model selection
 - Generation parameters (temperature, token limits)
-- Master user email
-- Cloud storage bucket name
+- `DEFAULT_ARCHIVE_URL` — the default public archive base path (default: `/archives`)
+- `ARCHIVE_URL_STORAGE_KEY` — the localStorage key for the user-configured archive URL
 
 ## Common Tasks
 
