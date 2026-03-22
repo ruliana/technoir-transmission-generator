@@ -67,6 +67,101 @@ gcloud run deploy technoir-transmission-engine \
   --allow-unauthenticated
 ```
 
+## CLI
+
+The CLI lets you generate, browse, and export transmissions from the terminal — no browser required. Output JSON is fully compatible with the web app's import function.
+
+### Setup
+
+```bash
+# Install dependencies (includes tsx for running TypeScript directly)
+npm install
+
+# Copy your Gemini API key into the environment
+export GEMINI_API_KEY=your-key-here
+# or pass it per-command with --api-key <key>
+```
+
+### `generate`
+
+Generate a complete Transmission and write it to disk.
+
+```bash
+npx tsx cli/index.ts generate \
+  --theme "Rain-soaked Hong Kong, 2077" \
+  --preset neon-chrome \
+  --no-images \
+  --output ./transmissions/kowloon.json
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--theme <text>` | *(required)* | The setting prompt — any cyberpunk theme works |
+| `--preset <id>` | `neon-chrome` | Style preset: `neon-chrome`, `rust-decay`, `shadow-deep`, `vinepunk` |
+| `--output <path>` | `./transmission.json` | Where to write the JSON file |
+| `--no-images` | off | Skip all image generation (much faster, text-only) |
+| `--api-key <key>` | `$GEMINI_API_KEY` | Gemini API key (falls back to env var) |
+
+> **Note:** Without `--no-images` the generator produces a header image and one image per lead (37 image calls total). Use `--no-images` for fast iteration; images can be generated later in the web app.
+
+### `list`
+
+Print a table of transmissions saved in the local storage directory.
+
+```bash
+npx tsx cli/index.ts list
+npx tsx cli/index.ts list --dir ./transmissions
+```
+
+```
+ID               Created      Leads  Title
+────────────────────────────────────────────────────────────────────────────────
+1774213322149    3/22/2026    36     The Lion's Halo
+1774212669099    3/22/2026    36     Silt & Silicon: The Drowning Metropolis
+```
+
+Default storage directory: `~/.technoir/transmissions/`
+
+### `export`
+
+Export a saved transmission to a file by ID.
+
+```bash
+# Plain JSON
+npx tsx cli/index.ts export 1774213322149 \
+  --dir ./transmissions \
+  --output ./lion-halo.json
+
+# Gzip-compressed (smaller, compatible with web app import)
+npx tsx cli/index.ts export 1774213322149 \
+  --dir ./transmissions \
+  --output ./lion-halo.json.gz \
+  --compress
+```
+
+The exported file can be imported directly in the web app via **Local Archive → Import**.
+
+### Adding transmissions to the Public Network archive
+
+Drop exported `.json` (or `.json.gz`) files into `public/archives/` and add an entry to `public/archives/manifest.json`:
+
+```bash
+# 1. Generate (text-only is fine for archiving)
+npx tsx cli/index.ts generate \
+  --theme "Flooded Jakarta, 2081" \
+  --preset rust-decay \
+  --no-images \
+  --output /tmp/jakarta.json
+
+# 2. Copy into the archive directory (tracked via Git LFS)
+cp /tmp/jakarta.json public/archives/<id>.json
+
+# 3. Add the manifest entry (id, title, summary, filename, createdAt)
+#    then commit and push — Git LFS handles the binary payload
+git add public/archives/ && git commit -m "archive: add Jakarta transmission"
+git push
+```
+
 ## Tech Stack
 
 - **React 19** + TypeScript
@@ -78,17 +173,49 @@ gcloud run deploy technoir-transmission-engine \
 ## Project Structure
 
 ```
-├── App.tsx              # Main component — all UI state and generation orchestration
-├── ErrorBoundary.tsx    # Top-level React error boundary
-├── constants.tsx        # System prompts, style presets, category list
-├── types.ts             # TypeScript types (Transmission, Lead, StyleGuide, …)
-├── index.css            # Tailwind entry point
-├── index.html           # Shell — custom cyberpunk CSS, fonts
-├── services/
-│   ├── gemini.ts        # All Gemini API calls (text + image)
-│   ├── db.ts            # IndexedDB via TechnoirDB
-│   └── cloud.ts         # Read-only Google Cloud Storage fetch
-└── render.yaml          # Render.com static site config
+├── App.tsx                        # Main component — UI state and generation orchestration
+├── constants.tsx                  # System prompts, style presets, category list
+├── types.ts                       # TypeScript types (Transmission, Lead, StyleGuide, …)
+│
+├── core/
+│   └── generator.ts               # Isomorphic generation pipeline (no browser APIs)
+│
+├── adapters/
+│   ├── ApiKeyProvider.ts          # EnvKeyProvider (CLI) + LocalStorageKeyProvider (browser)
+│   ├── storage/
+│   │   ├── IStorage.ts            # Storage interface
+│   │   ├── FileSystemStorage.ts   # Node.js: reads/writes ~/.technoir/transmissions/
+│   │   └── IndexedDbStorage.ts    # Browser: IndexedDB-backed
+│   └── archive/
+│       ├── IArchive.ts            # Archive interface
+│       ├── BrowserArchive.ts      # HTTP fetch (public network tab)
+│       └── FileArchive.ts         # Local directory (CLI offline use)
+│
+├── services/                      # Browser shims — keep App.tsx import-compatible
+│   ├── gemini.ts                  # Reads key from localStorage, delegates to core/generator
+│   ├── db.ts                      # IndexedDB + DOM export/import helpers
+│   └── archive.ts                 # Wraps BrowserArchive with localStorage URL config
+│
+├── cli/
+│   ├── index.ts                   # CLI entry point (commander)
+│   ├── commands/
+│   │   ├── generate.ts            # technoir generate
+│   │   ├── list.ts                # technoir list
+│   │   └── export.ts              # technoir export
+│   └── utils/
+│       └── progress.ts            # stderr logging helpers
+│
+├── tests/
+│   ├── fixtures/
+│   │   ├── golden/                # Immutable reference Transmission (hand-crafted)
+│   │   └── mocks/gemini-responses # Per-step Gemini response payloads
+│   ├── helpers/mockGemini.ts      # vi.mock stub + stubStreamResponse / stubNoImage
+│   └── unit/                      # 75 Vitest BDD tests across 9 files
+│
+├── public/archives/               # Public Network transmissions (Git LFS)
+│   └── manifest.json              # Index file (regular git, not LFS)
+│
+└── render.yaml                    # Render.com static site config
 ```
 
 ## License
