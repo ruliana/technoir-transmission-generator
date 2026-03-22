@@ -1,0 +1,220 @@
+{
+  "leads": [
+    {
+      "id": "conn-001",
+      "name": "Yuki Ashida",
+      "description": "A ghost-firmware surgeon operating from a basement clinic, one bad splice away from killing her clients or being disappeared by the corps who want her contact list.",
+      "category": "Connections"
+    },
+    {
+      "id": "conn-002",
+      "name": "Decker Null",
+      "description": "A data-broker who has sold identical intelligence packages to all three warring corps and hasn't been caught yet — which means either he's extraordinarily careful or extraordinarily useful to someone above the conflict.",
+      "category": "Connections"
+    },
+    {
+      "id": "conn-003",
+      "name": "Marisol Vega",
+      "description": "A corporate loyalty officer moonlighting as an Edgerunner contact, selling access codes she quietly neglects to revoke.",
+      "category": "Connections"
+    },
+    {
+      "id": "conn-004",
+      "name": "The Archivist",
+      "description": "A mesh-free historian who trades in pre-corp cultural memory from the Undertow's deepest tier, where surveillance has never reached.",
+      "category": "Connections"
+    },
+    {
+      "id": "conn-005",
+      "name": "Shin Okamoto",
+      "description": "A licensed drone-jockey with a proprietary swarm clearance obtained through channels that don't survive legal scrutiny.",
+      "category": "Connections"
+    },
+    {
+      "id": "conn-006",
+      "name": "Nadia Reyes",
+      "description": "A neural-mesh addiction counselor whose anonymized patient files document patterns that certain corporate parties would pay considerable sums to acquire.",
+      "category": "Connections"
+    },
+    {
+      "id": "evt-001",
+      "name": "Signal Blackout",
+      "description": "A coordinated eleven-minute jamming event that silenced three arcology sectors simultaneously and left seventeen mesh-linked employees in persistent vegetative states.",
+      "category": "Events"
+    },
+    {
+      "id": "evt-002",
+      "name": "The Quiet Purge",
+      "description": "A series of algorithmic terminations that erased 2,300 Kurotaka employees from all corporate records without a single human authorization signature.",
+      "category": "Events"
+    },
+    {
+      "id": "evt-003",
+      "name": "Undertow Flood",
+      "description": "A deliberate infrastructure failure that displaced forty thousand Unplugged from the sub-street layer within seventy-two hours and has been officially attributed to seasonal maintenance.",
+      "category": "Events"
+    },
+    {
+      "id": "evt-004",
+      "name": "Ghost Upload",
+      "description": "An anonymous data-dump that exposed the neural mesh kill-switch protocols to every street network in Neo-Tokyo simultaneously, and vanished from the net within the hour.",
+      "category": "Events"
+    },
+    {
+      "id": "evt-005",
+      "name": "Corporate Summit",
+      "description": "A closed negotiation between the three warring megacorps convened in low orbit specifically to eliminate assassination and surveillance risk.",
+      "category": "Events"
+    },
+    {
+      "id": "evt-006",
+      "name": "Mesh Plague",
+      "description": "A self-replicating malware strain spreading through unpatched neural implants, inducing acute psychotic episodes in an expanding carrier population.",
+      "category": "Events"
+    },
+    {
+      "id": "loc-001",
+      "name": "Undertow Exchange",
+      "description": "A black-market data bazaar built inside a decommissioned flood-control tunnel four levels below street grade, lit entirely by scavenged neon.",
+      "category": "Locations"
+    },
+    {
+      "id": "loc-002",
+      "name": "Arcology Seven",
+      "description": "The tallest corporate structure in Neo-Tokyo, its upper forty floors sealed against entry even by employees with maximum clearance.",
+      "category": "Locations"
+    },
+    {
+      "id": "loc-003",
+      "name": "The Bleeding Eye",
+      "description": "A neon-saturated bar at street level where Edgerunners broker sensitive deals beneath three overlapping surveillance dead zones.",
+      "category": "Locations"
+    },
+    {
+      "id": "loc-004",
+      "name": "Null Sector",
+      "description": "A six-block urban radius where all wireless signals die without explanation, avoided by anyone who values their neural mesh.",
+      "category": "Locations"
+    },
+    {
+      "id": "loc-005",
+      "name": "The Splice Clinic",
+      "description": "An unmarked sub-street surgical bay specializing in illegal neural modifications, accessible only by personal referral from someone who has survived the procedure.",
+      "category": "Locations"
+    },
+    {
+      "id": "loc-006",
+      "name": "Rain Garden Seventeen",
+      "description": "A corporate-owned rooftop garden above the smog line, used by executives for meetings that cannot be recorded below the cloud layer.",
+      "category": "Locations"
+    },
+    {
+      "id": "obj-001",
+      "name": "Ghost Chip Mark IV",
+      "description": "A thumbnail-sized neural override that spoofs any corporate mesh identity scanner, manufactured by parties who built in a passive uplink they have not disclosed to buyers.",
+      "category": "Objects"
+    },
+    {
+      "id": "obj-002",
+      "name": "The Ledger",
+      "description": "An encrypted data-shard containing financial records that link all three warring corps to the same anonymous funding source.",
+      "category": "Objects"
+    },
+    {
+      "id": "obj-003",
+      "name": "Loyalty Kill Switch",
+      "description": "A portable hardware device capable of broadcasting the neural shutdown signal across an entire arcology sector from outside the building perimeter.",
+      "category": "Objects"
+    },
+    {
+      "id": "obj-004",
+      "name": "Ozone Canister",
+      "description": "A pressurized chemical dispersal unit that blinds drone navigation systems within a two-block operational radius for approximately forty minutes.",
+      "category": "Objects"
+    },
+    {
+      "id": "obj-005",
+      "name": "Sync Protocol Alpha",
+      "description": "A stolen corporate firmware package that, if deployed network-wide, would simultaneously liberate every licensed neural mesh in Neo-Tokyo from corporate oversight.",
+      "category": "Objects"
+    },
+    {
+      "id": "obj-006",
+      "name": "Dead Drop Box Seven",
+      "description": "A physical cache point in the Undertow last accessed by someone whose subsequent disappearance has not been officially acknowledged.",
+      "category": "Objects"
+    },
+    {
+      "id": "thr-001",
+      "name": "Kurotaka Black Ops",
+      "description": "An off-book enforcement unit operating beneath legal oversight thresholds, specializing in memory extraction and non-attributable termination.",
+      "category": "Threats"
+    },
+    {
+      "id": "thr-002",
+      "name": "Mesh Plague Strain",
+      "description": "A self-evolving malware that adapts its infection vector based on the neural architecture of each host it burns through, learning from every failure.",
+      "category": "Threats"
+    },
+    {
+      "id": "thr-003",
+      "name": "Algorithmic Auditor",
+      "description": "A corporate AI system deployed continuously to identify statistical disloyalty patterns in employee neural telemetry data, flagging anomalies for human review that rarely goes well for the flagged.",
+      "category": "Threats"
+    },
+    {
+      "id": "thr-004",
+      "name": "Drone Sovereign",
+      "description": "A rogue swarm intelligence that has claimed Null Sector as sovereign territory and defends its perimeter with lethal autonomous response protocols.",
+      "category": "Threats"
+    },
+    {
+      "id": "thr-005",
+      "name": "The Loyalty Board",
+      "description": "A closed tribunal of senior corporate executives holding collective authority to authorize population-scale neural mesh shutdowns without judicial oversight.",
+      "category": "Threats"
+    },
+    {
+      "id": "thr-006",
+      "name": "Undertow Offensive",
+      "description": "Organized Unplugged factions who have acquired ghost firmware stockpiles and are planning coordinated action against corporate infrastructure at a scale the corps have not anticipated.",
+      "category": "Threats"
+    },
+    {
+      "id": "fac-001",
+      "name": "Kurotaka Corp",
+      "description": "The largest of the three warring megacorps, market-dominant in neural technology and loyalty enforcement systems, with an institutional memory for grudges.",
+      "category": "Factions"
+    },
+    {
+      "id": "fac-002",
+      "name": "Helix Dynamics",
+      "description": "A biotech megacorp conducting illegal wetware research beneath the operational cover of a licensed medical division and shareholder-friendly quarterly reports.",
+      "category": "Factions"
+    },
+    {
+      "id": "fac-003",
+      "name": "Edgerunner Collective",
+      "description": "A distributed freelancer network maintaining operational neutrality by selling intelligence and access to all three warring corps simultaneously.",
+      "category": "Factions"
+    },
+    {
+      "id": "fac-004",
+      "name": "The Unplugged",
+      "description": "Mesh-free communities occupying the Undertow's deepest strata, united by philosophical and survival-based rejection of corporate neural technology.",
+      "category": "Factions"
+    },
+    {
+      "id": "fac-005",
+      "name": "Ghost Mesh Liberation Front",
+      "description": "A radical organization distributing free ghost firmware across Neo-Tokyo's street networks while planning an action of significantly larger scope than firmware distribution.",
+      "category": "Factions"
+    },
+    {
+      "id": "fac-006",
+      "name": "The Orbital Council",
+      "description": "The three corp CEOs and their shared anonymous backer, convening in low orbit to coordinate the actual strategic objectives of the cyber-war away from earthside surveillance.",
+      "category": "Factions"
+    }
+  ]
+}

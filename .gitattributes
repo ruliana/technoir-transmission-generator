@@ -1,0 +1,4 @@
+public/archives/*.json filter=lfs diff=lfs merge=lfs -text
+public/archives/*.json.gz filter=lfs diff=lfs merge=lfs -text
+public/archives/*.gz filter=lfs diff=lfs merge=lfs -text
+public/archives/manifest.json !filter !diff !merge text
